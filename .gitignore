@@ -1,0 +1,16 @@
+# Data files (HDB datasets can be large!)
+*.csv
+*.xlsx
+*.json
+!metadata.json
+
+# Python/Jupyter
+__pycache__/
+.ipynb_checkpoints
+.venv/
+venv/
+env/
+
+# OS files
+.DS_Store
+Thumbs.db
