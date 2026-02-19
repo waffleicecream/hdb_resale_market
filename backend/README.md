@@ -6,6 +6,7 @@ Run the notebooks in this order:
 
 1. **`data_exploration.ipynb`** - Loads raw data, merges RPI, creates real prices, and saves the base merged dataset.
 2. **`add_macro_variables.ipynb`** - Adds macroeconomic variables (SORA, inflation, real interest rate) to the merged dataset.
+3. **`mrt_pipeline.ipynb`** - Geocodes every unique HDB address and finds the nearest MRT station distance using the OneMap API. Requires `../.env` to be filled in with OneMap credentials before running.
 
 ## Raw Data (`../data/`)
 
@@ -23,11 +24,21 @@ Run the notebooks in this order:
 |------|-------------|
 | `merged_hdb_resale_with_rpi.csv` | Output of notebook 1. Transaction data merged with RPI and real prices. |
 | `merged_hdb_resale_with_macro.csv` | Output of notebook 2. Final dataset for modeling, filtered from 2018-Q2 onwards. |
+| `hdb_with_mrt_distances.csv` | Output of notebook 3. Full dataset enriched with lat/lon coordinates and nearest MRT station details. |
 | `quarterly_summary.csv` | Quarterly price statistics (count, mean, median, min, max). |
 | `quarterly_macro_summary.csv` | Quarterly macro variables with transaction counts. |
 | `MACRO_VARIABLES_DICTIONARY.md` | Detailed documentation of all macro variables added. |
 
-## Final Dataset Columns (`merged_hdb_resale_with_macro.csv`)
+## Cache and Config Files (project root)
+
+| File | Description |
+|------|-------------|
+| `.env` | OneMap API credentials. Fill in `ONEMAP_EMAIL` and `ONEMAP_PASSWORD` before running notebook 3. |
+| `geocode_cache.json` | Auto-created by notebook 3. Caches geocoded lat/lon per address — safe to delete to re-geocode from scratch. |
+| `mrt_cache.json` | Auto-created by notebook 3. Caches nearest MRT results per address — safe to delete to re-fetch from scratch. |
+| `failed_geocodes.csv` | Auto-created by notebook 3. Lists addresses that could not be geocoded. |
+
+## Final Dataset Columns (`hdb_with_mrt_distances.csv`)
 
 ### Transaction-level features
 | Column | Description |
@@ -55,3 +66,11 @@ Run the notebooks in this order:
 | `real_interest_rate` | Real interest rate: `sora_3m - inflation_yoy` (%) |
 | `sora_3m_lag1` | Previous quarter's SORA (%) |
 | `real_interest_rate_lag1` | Previous quarter's real interest rate (%) |
+
+### Geocoding and MRT features
+| Column | Description |
+|--------|-------------|
+| `lat` | Latitude of the flat address (from OneMap geocoding) |
+| `lon` | Longitude of the flat address (from OneMap geocoding) |
+| `nearest_mrt_line` | MRT line of the nearest open station at time of transaction (e.g. NS, EW, DT, CC, NE, TE). NaN if no open MRT found within 5 km. |
+| `nearest_mrt_dist_m` | Straight-line distance to the nearest MRT station that was open at transaction time (metres). NaN if none found within 5 km. |
