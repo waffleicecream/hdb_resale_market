@@ -7,6 +7,7 @@ Run the notebooks in this order:
 1. **`data_exploration.ipynb`** - Loads raw data, merges RPI, creates real prices, and saves the base merged dataset.
 2. **`add_macro_variables.ipynb`** - Adds macroeconomic variables (SORA, inflation, real interest rate) to the merged dataset.
 3. **`mrt_pipeline.ipynb`** - Geocodes every unique HDB address and finds the nearest MRT station distance using the OneMap API. Requires `../.env` to be filled in with OneMap credentials before running.
+4. **`amenities_pipeline.ipynb`** - Computes amenity distances: nearest hawker centre (open at time of transaction), CBD (Raffles Place MRT proxy), nearest MOE primary school, nearest park, and nearest SportSG sport facility. Geocodes primary schools via OneMap API on first run (cached thereafter). All columns accumulated in memory; dataset written once at the end. Saves to `hdb_with_amenities_macro.csv`.
 
 ## Raw Data (`../data/`)
 
@@ -17,6 +18,11 @@ Run the notebooks in this order:
 | `3MonthCompoundedSORA2017to2026.csv` | Daily 3-month compounded SORA from MAS. Benchmark interest rate for housing loans. |
 | `MedianResalePricesforRegisteredApplicationsbyTownandFlatType.csv` | Quarterly median resale prices aggregated by town and flat type. |
 | `percentagechangeinCPImonthly.xlsx` | Monthly CPI percentage change data. |
+| `HawkerCentresGEOJSON.geojson` | Hawker centre point locations with `STATUS` and `EST_ORIGINAL_COMPLETION_DATE` fields. Used by notebook 4. |
+| `general-information-of-schools.csv` | MOE school directory. Filtered to `mainlevel_code == 'PRIMARY'` for primary school distance computation in notebook 4. |
+| `Parks.geojson` | NParks managed green space point locations. Non-park features (playgrounds, car parks, terminals, etc.) are excluded before distance computation in notebook 4. |
+| `SportSGSportFacilitiesGEOJSON.geojson` | SportSG managed sport facility point locations (45 facilities). Used by notebook 4. |
+| `shoppingmalls.csv` | Shopping mall locations (238 rows, 221 unique malls after deduplication by name). Used by notebook 4. |
 
 ## Output Data (`../merged_data/`)
 
@@ -25,18 +31,20 @@ Run the notebooks in this order:
 | `merged_hdb_resale_with_rpi.csv` | Output of notebook 1. Transaction data merged with RPI and real prices. |
 | `merged_hdb_resale_with_macro.csv` | Output of notebook 2. Final dataset for modeling, filtered from 2018-Q2 onwards. |
 | `hdb_with_mrt_distances.csv` | Output of notebook 3. Full dataset enriched with lat/lon coordinates and nearest MRT station details. |
+| `hdb_with_amenities_macro.csv` | Output of notebook 4. Full dataset enriched with `dist_nearest_hawker_m`, `dist_cbd_m`, `dist_nearest_primary_m`, `dist_nearest_park_m`, `dist_nearest_sportsg_m`, and `dist_nearest_mall_m`. |
 | `quarterly_summary.csv` | Quarterly price statistics (count, mean, median, min, max). |
 | `quarterly_macro_summary.csv` | Quarterly macro variables with transaction counts. |
 | `MACRO_VARIABLES_DICTIONARY.md` | Detailed documentation of all macro variables added. |
 
-## Cache and Config Files (project root)
+## Cache and Config Files
 
 | File | Description |
 |------|-------------|
-| `.env` | OneMap API credentials. Fill in `ONEMAP_EMAIL` and `ONEMAP_PASSWORD` before running notebook 3. |
-| `geocode_cache.json` | Auto-created by notebook 3. Caches geocoded lat/lon per address — safe to delete to re-geocode from scratch. |
-| `mrt_cache.json` | Auto-created by notebook 3. Caches nearest MRT results per address — safe to delete to re-fetch from scratch. |
-| `failed_geocodes.csv` | Auto-created by notebook 3. Lists addresses that could not be geocoded. |
+| `.env` | OneMap API credentials. Fill in `ONEMAP_EMAIL` and `ONEMAP_PASSWORD` before running notebooks 3 and 4. |
+| `data/geocode_cache.json` | Auto-created by notebook 3. Caches geocoded lat/lon per HDB address — safe to delete to re-geocode from scratch. |
+| `data/mrt_cache.json` | Auto-created by notebook 3. Caches nearest MRT results per address — safe to delete to re-fetch from scratch. |
+| `data/failed_geocodes.csv` | Auto-created by notebook 3. Lists addresses that could not be geocoded. |
+| `data/school_geocode_cache.json` | Auto-created by notebook 4 (Phase 6). Caches geocoded lat/lon per primary school postal code — safe to delete to re-geocode from scratch. |
 
 ## Final Dataset Columns (`hdb_with_mrt_distances.csv`)
 
@@ -74,3 +82,13 @@ Run the notebooks in this order:
 | `lon` | Longitude of the flat address (from OneMap geocoding) |
 | `nearest_mrt_line` | MRT line of the nearest open station at time of transaction (e.g. NS, EW, DT, CC, NE, TE). NaN if no open MRT found within 5 km. |
 | `nearest_mrt_dist_m` | Straight-line distance to the nearest MRT station that was open at transaction time (metres). NaN if none found within 5 km. |
+
+### Amenity features (`hdb_with_amenities_macro.csv`)
+| Column | Description |
+|--------|-------------|
+| `dist_nearest_hawker_m` | Straight-line distance (metres) to the nearest hawker centre open at time of transaction. NaN for failed geocodes. |
+| `dist_cbd_m` | Straight-line distance (metres) to the CBD (Raffles Place MRT proxy). NaN for failed geocodes. |
+| `dist_nearest_primary_m` | Straight-line distance (metres) to the nearest MOE primary school. NaN for failed geocodes. |
+| `dist_nearest_park_m` | Straight-line distance (metres) to the nearest NParks managed green space (playgrounds and non-park features excluded). NaN for failed geocodes. |
+| `dist_nearest_sportsg_m` | Straight-line distance (metres) to the nearest SportSG managed sport facility. NaN for failed geocodes. |
+| `dist_nearest_mall_m` | Straight-line distance (metres) to the nearest shopping mall (221 unique malls, deduplicated from 238 rows). NaN for failed geocodes. |
