@@ -1,0 +1,117 @@
+/* PropertyMinBrothers — global styles */
+
+/* ── Typography ────────────────────────────────────────────── */
+body {
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+  background-color: #f5f5f0;
+  color: #2b2b2b;
+}
+
+/* ── Navbar ─────────────────────────────────────────────────── */
+.navbar {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+.nav-link-custom {
+  color: #cccccc !important;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+  padding: 0.4rem 1rem !important;
+  transition: color 0.2s ease;
+}
+
+.nav-link-custom:hover,
+.nav-link-custom.active {
+  color: #ffffff !important;
+  border-bottom: 2px solid #5bc8af;
+}
+
+/* ── Cards ───────────────────────────────────────────────────── */
+.card {
+  border: none;
+  border-radius: 8px;
+}
+
+.card-body {
+  border-radius: 8px;
+}
+
+/* ── Map container ───────────────────────────────────────────── */
+.js-plotly-plot .plotly .modebar {
+  right: 8px !important;
+}
+
+/* ── Form inputs in dark panel ───────────────────────────────── */
+.bg-dark .form-control,
+.bg-dark .form-select,
+.bg-dark .input-group-text {
+  background-color: #3d3d3d;
+  border-color: #555;
+  color: #f0f0f0;
+}
+
+.bg-dark .form-control::placeholder {
+  color: #888;
+}
+
+.bg-dark .Select-control {
+  background-color: #3d3d3d !important;
+  border-color: #555 !important;
+  color: #f0f0f0 !important;
+}
+
+/* Dash Dropdown inside dark panel */
+.bg-dark .Select-value-label {
+  color: #f0f0f0 !important;
+}
+
+/* ── Comparable cards ────────────────────────────────────────── */
+.card.mb-2 {
+  transition: box-shadow 0.15s ease;
+}
+.card.mb-2:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12) !important;
+}
+
+/* ── Button group toggle ─────────────────────────────────────── */
+.btn-group .btn.active {
+  background-color: #2b2b2b;
+  color: #ffffff;
+  border-color: #2b2b2b;
+}
+
+/* ── Slider ─────────────────────────────────────────────────── */
+.rc-slider-track {
+  background-color: #27ae60;
+}
+
+.rc-slider-handle {
+  border-color: #27ae60;
+  background-color: #27ae60;
+}
+
+/* ── Scrollable comparables panel ───────────────────────────── */
+#fv-comparables {
+  max-height: 510px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/* ── Hero section ────────────────────────────────────────────── */
+.hero-section {
+  background: linear-gradient(135deg, #2b2b2b 0%, #27ae60 100%);
+  color: white;
+  padding: 3rem 2rem;
+  border-radius: 12px;
+  margin-bottom: 2rem;
+}
+
+/* ── Alert overrides ─────────────────────────────────────────── */
+.alert-success {
+  border-left: 4px solid #27ae60;
+}
+.alert-primary {
+  border-left: 4px solid #2980b9;
+}
