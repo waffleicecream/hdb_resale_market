@@ -33,7 +33,7 @@ server = app.server   # expose for gunicorn / Render
 
 # ── Navbar ────────────────────────────────────────────────────────────────────
 NAV_BRAND_STYLE = {
-    "fontFamily": "'Georgia', serif",
+    "fontFamily": "'arial', serif",
     "fontWeight": "700",
     "fontSize": "1.15rem",
     "letterSpacing": "0.04em",
@@ -44,9 +44,9 @@ navbar = dbc.Navbar(
     dbc.Container(
         [
             dbc.NavbarBrand(
-                [html.Span("PROPERTY", style={"color": "#ffffff"}),
-                 html.Span("MIN", style={"color": "#5bc8af"}),
-                 html.Span("BROTHERS", style={"color": "#ffffff"})],
+                [html.Span("买房子", style={"color": "#88a77b"}),
+                 html.Span("卖房子", style={"color": "#8927d6"}),
+                 html.Span("找我们", style={"color": "#f1b52a"})],
                 style=NAV_BRAND_STYLE,
                 href="/",
             ),
@@ -58,7 +58,7 @@ navbar = dbc.Navbar(
                                             className="nav-link-custom")),
                     dbc.NavItem(dbc.NavLink("FLAT VALUATION",  href="/flat-valuation",       active="exact",
                                             className="nav-link-custom")),
-                    dbc.NavItem(dbc.NavLink("AMENITIES",       href="/amenities-comparison", active="exact",
+                    dbc.NavItem(dbc.NavLink("AMENITIES COMPARISON",       href="/amenities-comparison", active="exact",
                                             className="nav-link-custom")),
                 ],
                 navbar=True,
