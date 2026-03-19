@@ -34,6 +34,15 @@ layout = html.Div(
                     className="display-5 fw-bold mb-2",
                     style={"fontFamily": "'Georgia', serif"},
                 ),
+
+                html.H1(
+                    [html.Span("买房子", style={"color": "#27ae60"}),
+                     html.Span("卖房子", style={"color": "#2b2b2b"}),
+                     html.Span("找我们", style={"color": "#27ae60"})],
+                    className="display-5 fw-bold mb-2",
+                    style={"fontFamily": "'Georgia', serif"},
+                ),
+
                 html.P(
                     "Your data-driven companion for navigating Singapore's HDB resale market.",
                     className="lead text-muted mb-4",
