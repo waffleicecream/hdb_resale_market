@@ -1,0 +1,13 @@
+# Frontend — PropertyMinBrothers Dash app
+dash>=2.17
+dash-bootstrap-components>=1.6
+plotly>=5.20
+pandas>=2.0
+numpy>=1.26
+requests>=2.31
+gunicorn>=22.0        # for deployment (Render / Heroku)
+
+# Scraper notebook
+selenium>=4.20
+webdriver-manager>=4.0
+tqdm>=4.66
