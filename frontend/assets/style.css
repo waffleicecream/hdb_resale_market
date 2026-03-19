@@ -115,3 +115,38 @@ body {
 .alert-primary {
   border-left: 4px solid #2980b9;
 }
+
+/* ── Amenities Comparison table ──────────────────────────────── */
+.ac-comparison-table {
+  background-color: #ffffff;
+  font-size: 0.85rem;
+}
+
+.ac-comparison-table thead th {
+  background-color: #2b2b2b;
+  color: #ffffff;
+  vertical-align: top;
+  padding: 0.75rem;
+}
+
+.ac-metric-col {
+  width: 160px;
+  background-color: #f5f5f0;
+  font-weight: 600;
+  vertical-align: middle;
+  padding: 0.5rem 0.75rem;
+}
+
+.ac-flat-col {
+  min-width: 200px;
+}
+
+.ac-cell {
+  vertical-align: top;
+  padding: 0.5rem 0.75rem;
+}
+
+.ac-best {
+  background-color: rgba(39, 174, 96, 0.12);
+  border-left: 3px solid #27ae60 !important;
+}
