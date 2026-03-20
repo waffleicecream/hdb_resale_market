@@ -273,7 +273,34 @@ layout = html.Div(
                                     ),
                                 ),
                             ],
-                            className="mb-2 align-items-center",
+                            className="mb-1 align-items-center",
+                        ),
+                        # ── What are comparables? ──────────────────────────────
+                        html.Div([
+                            dbc.Badge(
+                                [html.I(className="bi bi-clock-history me-1"),
+                                 "Past sold transactions"],
+                                color="secondary",
+                                className="me-1",
+                                style={"fontSize": "0.7rem"},
+                            ),
+                            html.Small(
+                                "Not current listings",
+                                className="text-muted",
+                                style={"fontSize": "0.7rem"},
+                            ),
+                        ], className="mb-1"),
+                        html.Small(
+                            [
+                                html.I(className="bi bi-info-circle me-1 text-muted"),
+                                html.Span(
+                                    '"Sold" = HDB registration date of the completed '
+                                    "resale transaction (when the sale legally closed).",
+                                    className="text-muted",
+                                ),
+                            ],
+                            className="d-block mb-2",
+                            style={"fontSize": "0.7rem", "lineHeight": "1.4"},
                         ),
                         html.Div(id="fv-comparables"),
                     ],
@@ -371,27 +398,53 @@ def search_flat(n_clicks, sort_col,
         fig.update_layout(mapbox_center=center, mapbox_zoom=13.5)
 
     # ── Result card ───────────────────────────────────────────────────────────
+    n_comps = len(comps)
     if est_value:
         verdict_text, verdict_color = valuation_verdict(
             float(listed_price) if listed_price else None, est_value)
 
-        result_card = html.Div(
-            [
-                html.Div(
-                    [
-                        html.Small("Estimated Current Value:", className="fw-bold"),
-                        html.H3(f"${est_value:,.0f}", className="mb-0"),
-                        html.Small(f"Range: ${ci[0]:,.0f} – ${ci[1]:,.0f}",
-                                   className="text-white-50"),
-                    ],
-                    className="bg-danger text-white rounded p-3 text-center mb-2",
+        result_card = html.Div([
+            # Estimate block
+            html.Div([
+                html.Small([
+                    html.I(className="bi bi-calculator me-1"),
+                    "Estimated Current Value",
+                ], className="fw-bold d-block mb-1"),
+                html.H3(f"${est_value:,.0f}", className="mb-0"),
+                html.Small(
+                    f"Range: ${ci[0]:,.0f} – ${ci[1]:,.0f}",
+                    className="text-white-50",
                 ),
-                (
-                    dbc.Alert(verdict_text, color=verdict_color, className="text-center small py-2")
-                    if verdict_text else ""
-                ),
-            ]
-        )
+            ], className="bg-danger text-white rounded p-3 text-center mb-2"),
+
+            # Methodology note (distinguishes from General Trends avg)
+            html.Div([
+                html.Div([
+                    dbc.Badge("Personalised Estimate", color="danger",
+                              className="me-1", style={"fontSize": "0.65rem"}),
+                    html.Span("≠ Market Average",
+                              className="text-muted",
+                              style={"fontSize": "0.7rem"}),
+                ], className="mb-1"),
+                html.Small([
+                    f"Weighted average of the {n_comps} most similar past sales "
+                    "within 1.5 km, last 24 months. Matched on flat type, "
+                    "floor level, size and remaining lease. ",
+                    html.A(
+                        "See market-wide averages →",
+                        href="/general-trends",
+                        style={"color": "#2980b9", "fontSize": "0.7rem"},
+                    ),
+                ], style={"fontSize": "0.72rem", "lineHeight": "1.4"}),
+            ], className="bg-light rounded p-2 mb-2",
+               style={"borderLeft": "3px solid #2980b9"}),
+
+            # Verdict
+            dbc.Alert(
+                verdict_text, color=verdict_color,
+                className="text-center small py-2",
+            ) if verdict_text else "",
+        ])
     else:
         result_card = ""
 
@@ -402,49 +455,73 @@ def search_flat(n_clicks, sort_col,
     cards = []
     for _, row in comps_sorted.head(10).iterrows():
         addr = f"Blk {row.get('block', '')} {row.get('street_name', '')}".strip()
+
+        # Price delta vs listed price
         price_diff = ""
         if listed_price and est_value:
             diff = float(listed_price) - row["resale_price"]
+            sign = "+" if diff > 0 else ""
             price_diff = html.Small(
-                f" ({'+' if diff > 0 else ''}{diff:,.0f})",
+                f" ({sign}{diff:,.0f})",
                 className="text-muted",
             )
+
+        # Distance badge
         dist_badge = ""
         if "dist_km" in row and pd.notna(row["dist_km"]):
-            dist_badge = dbc.Badge(f"{row['dist_km']:.2f} km", color="light",
-                                   text_color="dark", className="me-1")
+            dist_badge = dbc.Badge(
+                f"{row['dist_km']:.2f} km away",
+                color="light", text_color="dark", className="me-1",
+                style={"fontSize": "0.68rem"},
+            )
+
+        # Sold date badge (prominent — this is the key date buyers ask about)
+        month_str = (
+            row["month"].strftime("%b %Y")
+            if pd.notna(row.get("month")) else "—"
+        )
+        sold_badge = dbc.Badge(
+            [html.I(className="bi bi-calendar3 me-1"), f"Sold {month_str}"],
+            color="light", text_color="secondary",
+            style={"fontSize": "0.68rem"},
+        )
+
+        # Verdict line (only shown if listed price provided)
+        if listed_price:
+            lp = float(listed_price)
+            if lp > row["resale_price"]:
+                diff_txt = f"↑ Listed ${lp - row['resale_price']:,.0f} above this comparable"
+            else:
+                diff_txt = f"↓ Listed ${row['resale_price'] - lp:,.0f} below this comparable"
+            verdict_line = html.Small(diff_txt, className="text-muted d-block mt-1")
+        else:
+            verdict_line = ""
 
         cards.append(
             dbc.Card(
-                dbc.CardBody(
-                    [
-                        html.Div(
-                            [html.Strong(addr),
-                             html.Span(f"  ${row['resale_price']:,.0f}", className="text-success ms-2"),
-                             price_diff],
-                            className="mb-1",
+                dbc.CardBody([
+                    # Address + price
+                    html.Div([
+                        html.Strong(addr, style={"fontSize": "0.82rem"}),
+                        html.Span(
+                            f"  ${row['resale_price']:,.0f}",
+                            className="text-success fw-bold ms-2",
                         ),
-                        html.Div(
-                            [
-                                dist_badge,
-                                html.Small(
-                                    f"{row['flat_type']} | {row['floor_area_sqm']:.0f} sqm | "
-                                    f"{row['month'].strftime('%b %Y') if pd.notna(row['month']) else ''}",
-                                    className="text-muted",
-                                ),
-                            ]
-                        ),
-                        html.Ul(
-                            [
-                                html.Li(f"Ask price {'lower' if (listed_price or 0) < row['resale_price'] else 'higher'} "
-                                        f"than this comparable",
-                                        className="small text-muted"),
-                            ],
-                            className="mb-0 ps-3",
-                        ),
-                    ],
-                    className="py-2 px-3",
-                ),
+                        price_diff,
+                    ], className="mb-1"),
+                    # Badges row: sold date (most prominent) + distance
+                    html.Div([
+                        sold_badge,
+                        dist_badge,
+                    ], className="mb-1"),
+                    # Flat details
+                    html.Small(
+                        f"{row['flat_type'].title()} · "
+                        f"{row['floor_area_sqm']:.0f} sqm",
+                        className="text-muted",
+                    ),
+                    verdict_line,
+                ], className="py-2 px-3"),
                 className="mb-2 shadow-sm",
                 style={"fontSize": "0.82rem"},
             )
