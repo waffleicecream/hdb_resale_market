@@ -1,6 +1,6 @@
 # PROGRESS.md — HDB Resale Market Project
 
-_Last updated: 2026-03-19_
+_Last updated: 2026-03-22 (session 2)_
 
 ---
 
@@ -23,6 +23,12 @@ All 5 notebooks are implemented and have been run at least once:
    - `outputs/town_choropleth.geojson`
    - `outputs/national_cagr_benchmarks.json`
 
+6. **`price_model/ols_modelling.ipynb`** — OLS baseline model for HDB resale price prediction. Full pipeline: data cleaning, feature engineering, stratified 80/20 split, OLS fit with VIF check, diagnostics, and evaluation. Outputs `ols_model_summary.txt` and diagnostic PNG plots.
+   - **Features (39 total):** `remaining_lease_years`, `nearest_train_dist_m`, 6 amenity distances (standardised); flat type × 4, town × 25, floor category × 2 (one-hot)
+   - **Excluded:** `floor_area_sqm` (not a user input at inference time), `dist_cbd_m` (VIF 33.1, redundant with town fixed effects)
+   - **Target:** `log_resale_price_real` (log-transformed RPI-adjusted price); predictions exponentiated back to SGD at evaluation (median prediction, no Duan correction)
+   - **Results:** R² = 0.887 (log space), RMSE = $76,377, Linlin Loss = $83,218 (w=2), 80% PI coverage = 82.7%, VIF check clean (no feature > 10)
+
 ---
 
 ## What's Pending / Next Steps
@@ -41,8 +47,12 @@ All 5 notebooks are implemented and have been run at least once:
 - **`primary_schools_1km`** — pipe-separated school names within 1 km (Phase 6)
 - **`parks_1km`** — pipe-separated park names within 1 km (Phase 7)
 
+### Price Model (backend/price_model/)
+- **Next models to implement:** Random Forest, XGBoost (or other non-linear models) using the same feature set and train/test split as the OLS baseline
+- **Model comparison notebook:** Once all models are implemented, build a final comparison notebook computing composite 50/50 RMSE + Linlin scores across models
+
 ### Medium Priority
-- **`download_data.py`**: Script stub exists but not yet implemented. Goal: download raw data files from data.gov.sg dynamically instead of committing large CSVs to git. Dataset IDs are known for the main resale file and several amenity datasets.
+- ~~**`download_data.py`**: Script stub exists but not yet implemented.~~ **Done** — `download_data.py` was already fully implemented. Large raw data files and intermediate CSVs have been untracked from git (`git rm --cached`); `requirements.txt` re-encoded to UTF-8; `.env.example` added; `backend/README.md` setup section updated.
 
 ### Low Priority
 - **merged_data cleanup**: User mentioned wanting fewer intermediate files. Not yet resolved — current pipeline produces 4 sequential CSVs in `merged_data/`.
