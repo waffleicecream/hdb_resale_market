@@ -10,10 +10,10 @@ python backend/download_data.py
 
 This fetches 6 files into `data/` (skips any that already exist). The other data files (`shoppingmalls.csv`, `3MonthCompoundedSORA2017to2026.csv`, `percentagechangeinCPImonthly.xlsx`, `MedianResalePricesforRegisteredApplicationsbyTownandFlatType.csv`) are kept in the repo as they are not available via data.gov.sg.
 
-For notebooks 3 and 4, fill in your OneMap credentials in `../.env`:
-```
-ONEMAP_EMAIL=your_email
-ONEMAP_PASSWORD=your_password
+For notebooks 3 and 4, create `../.env` from the provided template and fill in your OneMap credentials ([register here](https://www.onemap.gov.sg/apidocs/)):
+```bash
+cp .env.example .env
+# then edit .env with your credentials
 ```
 
 ---
