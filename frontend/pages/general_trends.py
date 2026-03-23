@@ -1,12 +1,12 @@
 """
 General Trends page — Singapore HDB choropleth + town drill-down.
 
-Redesigned for HDB resale buyers:
-  - 4 KPI summary cards (national market context at a glance)
-  - Flat type dropdown + metric selector (Median Price / YoY Growth / $/sqm / Volume)
-  - Interactive choropleth — click any town to see its price trend + flat-type breakdown
-  - Clear methodology note distinguishing "Median Transaction Price" from the
-    personalised "Estimated Current Value" in the Flat Valuation tab
+Redesigned with The Architectural Ledger design system:
+  - KPI summary cards using kpi-card CSS class
+  - Flat type dropdown + metric selector
+  - Interactive choropleth — click any town for price trend + flat-type breakdown
+  - Town panel includes region/estate type metadata
+  - Methodology note distinguishing median transaction price from personalised estimate
 """
 
 import os
@@ -22,7 +22,7 @@ import dash_bootstrap_components as dbc
 from dash import dcc, html, Input, Output, callback
 
 dash.register_page(__name__, path="/general-trends",
-                   name="General Trends", title="General Trends")
+                   name="General Trends", title="Market Analysis")
 
 from data_store import DF, FLAT_TYPES, YEAR_MIN, YEAR_MAX
 
@@ -31,12 +31,14 @@ _GJ_PATH = os.path.join(
     os.path.dirname(__file__), "..", "..", "outputs", "town_choropleth.geojson"
 )
 
+
 def _load_geojson():
     if os.path.exists(_GJ_PATH):
         with open(_GJ_PATH) as f:
             return json.load(f)
     print("town_choropleth.geojson not found — scatter fallback will be used")
     return None
+
 
 GJ = _load_geojson()
 
@@ -85,6 +87,36 @@ TOWN_CENTROIDS = {
     "YISHUN":          (1.4304, 103.8354),
 }
 
+# ── Town metadata: region + estate type ──────────────────────────────────────
+TOWN_META = {
+    "ANG MO KIO":      ("North-East", "Mature Estate",     "Well-connected mature estate near Bishan-Ang Mo Kio Park"),
+    "BEDOK":           ("East",       "Mature Estate",     "Established eastern estate with dense amenities and transport links"),
+    "BISHAN":          ("Central",    "Mature Estate",     "Central location with premium access to city-fringe areas"),
+    "BUKIT BATOK":     ("West",       "Mature Estate",     "Leafy estate with proximity to Bukit Timah Nature Reserve"),
+    "BUKIT MERAH":     ("Central",    "Mature Estate",     "City-fringe location with direct access to the CBD"),
+    "BUKIT PANJANG":   ("West",       "Non-Mature Estate", "Newer township served by Bukit Panjang LRT"),
+    "BUKIT TIMAH":     ("Central",    "Mature Estate",     "Premium area adjacent to nature reserve, limited HDB supply"),
+    "CENTRAL AREA":    ("Central",    "Mature Estate",     "Most central HDB flats, closest proximity to the CBD"),
+    "CHOA CHU KANG":   ("West",       "Non-Mature Estate", "Western fringe town with Lot One mall and strong community facilities"),
+    "CLEMENTI":        ("West",       "Mature Estate",     "Established western town near NUS and the Jurong Lake District"),
+    "GEYLANG":         ("Central",    "Mature Estate",     "Dense urban area with excellent food culture and city connectivity"),
+    "HOUGANG":         ("North-East", "Mature Estate",     "North-east heartland with great local amenities and Hougang Mall"),
+    "JURONG EAST":     ("West",       "Mature Estate",     "Emerging regional hub adjacent to Jurong Lake District development"),
+    "JURONG WEST":     ("West",       "Non-Mature Estate", "Largest HDB town by area with strong community infrastructure"),
+    "KALLANG/WHAMPOA": ("Central",    "Mature Estate",     "Riverside estate near the Sports Hub and City Fringe"),
+    "MARINE PARADE":   ("East",       "Mature Estate",     "Compact coastal estate with East Coast Park access"),
+    "PASIR RIS":       ("East",       "Non-Mature Estate", "Coastal eastern town with beach parks and a resort atmosphere"),
+    "PUNGGOL":         ("North-East", "Non-Mature Estate", "Modern eco-town with waterfront living and Punggol Digital District"),
+    "QUEENSTOWN":      ("Central",    "Mature Estate",     "Singapore's first HDB satellite town, premium central location"),
+    "SEMBAWANG":       ("North",      "Non-Mature Estate", "Northern town near Canberra MRT with growing amenities"),
+    "SENGKANG":        ("North-East", "Non-Mature Estate", "Young family-oriented town with an extensive LRT network"),
+    "SERANGOON":       ("North-East", "Mature Estate",     "Well-established estate with NEX mall and Little India proximity"),
+    "TAMPINES":        ("East",       "Mature Estate",     "Self-contained eastern hub with malls, parks, and transport links"),
+    "TOA PAYOH":       ("Central",    "Mature Estate",     "Historic heartland estate with a strong community identity"),
+    "WOODLANDS":       ("North",      "Non-Mature Estate", "Largest northern town near Causeway Point and Johor Bahru"),
+    "YISHUN":          ("North",      "Non-Mature Estate", "Northern town with Khoo Teck Puat Hospital and extensive parks"),
+}
+
 # ── Compute national KPIs once at startup ────────────────────────────────────
 def _compute_kpis():
     df = DF.copy()
@@ -100,7 +132,7 @@ def _compute_kpis():
     vol_p = len(df[df["year"] == prev])
 
     tl = df[df["year"] == latest].groupby("town")["resale_price"].median()
-    tp = df[df["year"] == prev ].groupby("town")["resale_price"].median()
+    tp = df[df["year"] == prev].groupby("town")["resale_price"].median()
     common = tl.index.intersection(tp.index)
     if len(common):
         growth = (tl[common] - tp[common]) / tp[common] * 100
@@ -121,29 +153,26 @@ def _compute_kpis():
         med_l=med_l, price_chg=price_chg,
         vol_l=vol_l, vol_chg=vol_l - vol_p,
         best_town=best_town, best_pct=best_pct,
-        aff_town=aff_town,  aff_psqm=aff_psqm,
+        aff_town=aff_town, aff_psqm=aff_psqm,
     )
+
 
 _KPI = _compute_kpis()
 
 
 # ── KPI card helper ───────────────────────────────────────────────────────────
 def _kpi_card(icon, title, value, delta_str, positive):
-    color  = "#27ae60" if positive else "#e74c3c"
-    arrow  = "▲" if positive else "▼"
+    delta_cls = "kpi-delta-pos" if positive else "kpi-delta-neg"
+    arrow     = "▲" if positive else "▼"
     return dbc.Card(
         dbc.CardBody([
-            html.I(className=f"bi {icon}",
-                   style={"fontSize": "1.5rem", "color": "#5bc8af"}),
-            html.P(title, className="text-muted mb-0 mt-1",
-                   style={"fontSize": "0.68rem", "fontWeight": "700",
-                          "textTransform": "uppercase", "letterSpacing": "0.05em"}),
-            html.H5(value, className="fw-bold mb-0 mt-1"),
-            html.Span(f"{arrow} {delta_str}",
-                      style={"fontSize": "0.73rem", "color": color, "fontWeight": "600"}),
+            html.I(className=f"bi {icon} text-accent",
+                   style={"fontSize": "1.4rem"}),
+            html.Div(title, className="kpi-label mt-2"),
+            html.Div(value, className="kpi-value"),
+            html.Span(f"{arrow} {delta_str}", className=delta_cls),
         ]),
-        className="shadow-sm h-100",
-        style={"border": "none", "borderRadius": "10px"},
+        className="kpi-card h-100",
     )
 
 
@@ -153,41 +182,58 @@ _FT_OPTIONS = [{"label": "All Flat Types", "value": "ALL"}] + [
 ]
 
 _METRIC_OPTIONS = [
-    {"label": "Median Transaction Price ($)",   "value": "median_price"},
-    {"label": "Year-on-Year Price Growth (%)",  "value": "growth"},
-    {"label": "Price per SQM ($/sqm)",          "value": "psqm"},
-    {"label": "Market Activity (no. of txns)",  "value": "volume"},
+    {"label": "Median Transaction Price ($)",  "value": "median_price"},
+    {"label": "Year-on-Year Price Growth (%)", "value": "growth"},
+    {"label": "Price per SQM ($/sqm)",         "value": "psqm"},
+    {"label": "Market Activity (no. of txns)", "value": "volume"},
 ]
 
 
 # ── Placeholder town panel ────────────────────────────────────────────────────
 def _placeholder_panel():
-    return dbc.Card(
-        dbc.CardBody(
-            html.Div([
-                html.I(className="bi bi-geo-alt fs-1 text-muted"),
-                html.P(
-                    "Click any town on the map to see its price history "
-                    "and flat-type breakdown.",
-                    className="text-muted small mt-2 mb-0 text-center",
-                ),
-            ], className="d-flex flex-column align-items-center "
-                         "justify-content-center h-100 py-5"),
-        ),
-        className="h-100 shadow-sm",
-        style={"border": "none", "borderRadius": "10px", "minHeight": "490px"},
+    return html.Div(
+        [
+            html.I(className="bi bi-geo-alt",
+                   style={"fontSize": "2.5rem", "color": "#5bc8af", "opacity": "0.5"}),
+            html.P(
+                "Click any town on the map to explore its price history "
+                "and flat-type breakdown.",
+                className="mt-3 mb-0",
+                style={"color": "#454652", "fontSize": "0.88rem", "maxWidth": "220px",
+                       "textAlign": "center", "lineHeight": "1.6"},
+            ),
+        ],
+        style={
+            "display": "flex", "flexDirection": "column",
+            "alignItems": "center", "justifyContent": "center",
+            "minHeight": "490px", "padding": "2rem",
+            "background": "#f4f2ff", "borderRadius": "12px",
+        },
     )
 
 
-# ── Layout (function so KPIs evaluate fresh on every hot-reload) ──────────────
+# ── Layout ────────────────────────────────────────────────────────────────────
 def layout():
     k = _KPI
 
-    # ── KPI row ──────────────────────────────────────────────────────────────
+    # ── Page header ───────────────────────────────────────────────────────────
+    page_header = html.Div(
+        [
+            html.Div("Market Analysis", className="page-header-title"),
+            html.Div(
+                f"Browse price trends, growth rates and market activity across "
+                f"all towns from {YEAR_MIN} to {YEAR_MAX}.",
+                className="page-header-sub",
+            ),
+        ],
+        className="mb-4",
+    )
+
+    # ── KPI row ───────────────────────────────────────────────────────────────
     kpi_row = dbc.Row([
         dbc.Col(_kpi_card(
             "bi-house-fill",
-            f"National Median Price ({k['latest']})",
+            f"National Median ({k['latest']})",
             f"${k['med_l']:,.0f}",
             f"{abs(k['price_chg']):.1f}% vs {k['prev']}",
             k["price_chg"] >= 0,
@@ -210,17 +256,17 @@ def layout():
             "bi-tag-fill",
             "Best Value Town ($/sqm)",
             k["aff_town"].title() if k["aff_town"] != "—" else "—",
-            f"${k['aff_psqm']:,.0f}/sqm median" if k["aff_town"] != "—" else "n/a",
+            f"${k['aff_psqm']:,.0f}/sqm" if k["aff_town"] != "—" else "n/a",
             True,
         ), xs=12, sm=6, lg=3, className="mb-3"),
     ], className="g-3 mb-3")
 
-    # ── Filter / metric controls ──────────────────────────────────────────────
+    # ── Filter controls ───────────────────────────────────────────────────────
     controls = dbc.Card(
         dbc.CardBody(
             dbc.Row([
                 dbc.Col([
-                    html.Label("Flat Type", className="fw-semibold small text-muted mb-1"),
+                    html.Label("Flat Type", className="kpi-label mb-1"),
                     dcc.Dropdown(
                         id="gt-flat-type", options=_FT_OPTIONS,
                         value="ALL", clearable=False,
@@ -228,7 +274,7 @@ def layout():
                     ),
                 ], xs=12, md=3),
                 dbc.Col([
-                    html.Label("Map Metric", className="fw-semibold small text-muted mb-1"),
+                    html.Label("Map Metric", className="kpi-label mb-1"),
                     dcc.Dropdown(
                         id="gt-metric", options=_METRIC_OPTIONS,
                         value="median_price", clearable=False,
@@ -236,8 +282,7 @@ def layout():
                     ),
                 ], xs=12, md=4),
                 dbc.Col([
-                    html.Label(id="gt-year-label",
-                               className="fw-semibold small text-muted mb-1"),
+                    html.Label(id="gt-year-label", className="kpi-label mb-1"),
                     dcc.Slider(
                         id="gt-year",
                         min=YEAR_MIN, max=YEAR_MAX, step=1, value=YEAR_MAX,
@@ -248,8 +293,7 @@ def layout():
                    className="d-flex flex-column justify-content-end"),
             ], className="g-3 align-items-end"),
         ),
-        className="mb-3 shadow-sm",
-        style={"border": "none", "borderRadius": "10px"},
+        className="controls-panel mb-3",
     )
 
     # ── Map + town drill-down ─────────────────────────────────────────────────
@@ -258,12 +302,12 @@ def layout():
             dcc.Graph(
                 id="gt-map",
                 config={"scrollZoom": True, "displayModeBar": False},
-                style={"height": "490px", "borderRadius": "10px"},
+                style={"height": "490px", "borderRadius": "12px"},
             ),
             html.P(
-                "💡 Click any town to see its detailed price trend →",
-                className="text-muted text-center mt-1 mb-0",
-                style={"fontSize": "0.74rem"},
+                "💡 Click any town on the map to see its detailed price trend →",
+                className="text-center mt-2 mb-0",
+                style={"fontSize": "0.72rem", "color": "#454652"},
             ),
         ], xs=12, lg=7),
         dbc.Col([
@@ -271,11 +315,10 @@ def layout():
         ], xs=12, lg=5),
     ], className="g-3 mb-3")
 
-    # ── Methodology distinction note ──────────────────────────────────────────
+    # ── Methodology note ──────────────────────────────────────────────────────
     distinction = dbc.Card(
         dbc.CardBody(
             dbc.Row([
-                # Left: what this page shows
                 dbc.Col([
                     html.Div([
                         dbc.Badge("Market Benchmark", color="primary", className="me-2"),
@@ -287,53 +330,39 @@ def layout():
                         "resale transactions registered in that town and year — regardless "
                         "of floor level, remaining lease, or exact flat size. "
                         "Use this to understand broad market direction and compare towns.",
-                        className="text-muted small mb-0",
+                        className="mb-0",
+                        style={"fontSize": "0.82rem", "color": "#454652"},
                     ),
                 ], md=6, className="mb-3 mb-md-0"),
-
-                # Divider
-                dbc.Col(
-                    html.Hr(style={"borderLeft": "2px solid #dee2e6",
-                                   "height": "100%", "margin": "0 auto"}),
-                    md=1, className="d-none d-md-flex justify-content-center px-0",
-                ),
-
-                # Right: what Flat Valuation shows
+                dbc.Col(md=1, className="d-none d-md-flex"),
                 dbc.Col([
                     html.Div([
-                        dbc.Badge("Personalised Estimate", color="danger", className="me-2"),
+                        dbc.Badge("Personalised Estimate", color="dark", className="me-2"),
                         html.Strong("Estimated Current Value  (Flat Valuation tab)",
                                     style={"fontSize": "0.85rem"}),
                     ], className="mb-1"),
                     html.P([
-                        "The valuation tool computes a price estimate tailored to "
-                        "your specific flat — matching on flat type, floor level, size "
-                        "and remaining lease within 1.5 km, over the past 24 months. "
-                        "This accounts for your flat's individual characteristics. ",
+                        "The valuation tool computes a price estimate tailored to your "
+                        "specific flat — matching on flat type, floor level, size and "
+                        "remaining lease within 1.5 km, over the past 24 months. ",
                         html.A("→ Try Flat Valuation", href="/flat-valuation",
-                               style={"color": "#e74c3c", "fontWeight": "600"}),
-                    ], className="text-muted small mb-0"),
+                               style={"color": "#00145d", "fontWeight": "600"}),
+                    ], className="mb-0",
+                       style={"fontSize": "0.82rem", "color": "#454652"}),
                 ], md=5),
             ]),
         ),
-        className="shadow-sm",
-        style={"border": "none", "borderRadius": "10px",
-               "borderTop": "4px solid #5bc8af"},
+        className="methodology-card",
     )
 
     return html.Div([
-        html.H4("Singapore HDB Resale Market — General Trends",
-                className="fw-bold mb-1"),
-        html.P(
-            "Browse price trends, growth rates and market activity across all towns "
-            f"from {YEAR_MIN} to {YEAR_MAX}.",
-            className="text-muted small mb-3",
-        ),
+        page_header,
         kpi_row,
         controls,
         map_section,
         distinction,
-    ], className="container-fluid px-3 py-2")
+    ], className="container-fluid px-3 py-3",
+       style={"backgroundColor": "#fbf8ff", "minHeight": "calc(100vh - 64px)"})
 
 
 # ── Callbacks ─────────────────────────────────────────────────────────────────
@@ -361,10 +390,8 @@ def update_map(flat_type, metric, year):
         fig.update_layout(title=f"No data for {year}")
         return fig, f"Year: {year}"
 
-    # Aggregate by town
     agg = df_yr.groupby("town").agg(
         median_price=("resale_price", "median"),
-        avg_price=("resale_price", "mean"),
         volume=("resale_price", "count"),
     ).reset_index()
 
@@ -386,7 +413,6 @@ def update_map(flat_type, metric, year):
         / agg["prev_price"].replace(0, np.nan) * 100
     ).round(1)
 
-    # Metric config: (colour-bar label, colour scale, range)
     MCONF = {
         "median_price": (
             "Median Price ($)", "Blues",
@@ -402,7 +428,6 @@ def update_map(flat_type, metric, year):
     }
     clabel, cscale, rng = MCONF[metric]
 
-    # Rich hover tooltip
     def _hover(r):
         lines = [
             f"<b>{r['town'].title()}</b>",
@@ -415,17 +440,11 @@ def update_map(flat_type, metric, year):
         return "<br>".join(lines)
 
     agg["hover_txt"] = agg.apply(_hover, axis=1)
-
     year_label = f"Year: {year}"
-    ft_desc    = flat_type.title() if flat_type and flat_type != "ALL" else "All Flat Types"
 
-    # ── Choropleth (preferred) ────────────────────────────────────────────────
     if GJ is not None:
         agg["town_title"] = agg["town"].str.title()
-        TITLE_FIX = {"Kallang/Whampoa": "Kallang/Whampoa"}
-        agg["town_title"] = agg["town_title"].replace(TITLE_FIX)
 
-        # For growth metric use pre-computed CAGR from GeoJSON if available
         if metric == "growth" and not DF_CAGR.empty:
             agg = agg.merge(
                 DF_CAGR[["town_title", "cagr_1yr"]], on="town_title", how="left"
@@ -448,9 +467,7 @@ def update_map(flat_type, metric, year):
                 custom_data=["hover_txt", "town_title"],
                 labels={metric: clabel},
             )
-            fig.update_traces(
-                hovertemplate="%{customdata[0]}<extra></extra>"
-            )
+            fig.update_traces(hovertemplate="%{customdata[0]}<extra></extra>")
         except Exception as e:
             print(f"Choropleth error ({e}), falling back to scatter")
             fig = _scatter_map(agg, metric, clabel, cscale, rng)
@@ -460,10 +477,9 @@ def update_map(flat_type, metric, year):
     fig.update_layout(
         margin={"r": 0, "t": 0, "l": 0, "b": 0},
         coloraxis_colorbar=dict(
-            title=clabel, thickness=12, len=0.65,
-            title_font_size=11,
+            title=clabel, thickness=12, len=0.65, title_font_size=11,
         ),
-        paper_bgcolor="white",
+        paper_bgcolor="#fbf8ff",
     )
     return fig, year_label
 
@@ -480,8 +496,6 @@ def update_town_detail(clickData, flat_type):
 
     try:
         pts = clickData["points"][0]
-        # choropleth returns pts["location"] = town_title value
-        # scatter returns it via customdata[1]
         cd = pts.get("customdata") or []
         town_raw = (
             pts.get("location")
@@ -499,7 +513,6 @@ def update_town_detail(clickData, flat_type):
     df["year"] = df["year"].astype(int)
     df_town = df[df["town"] == town]
 
-    # Partial-match fallback (handles minor name mismatches)
     if df_town.empty:
         match = next((t for t in df["town"].unique() if town[:6] in t), None)
         if match:
@@ -510,14 +523,12 @@ def update_town_detail(clickData, flat_type):
 
     latest = int(df["year"].max())
 
-    # Which flat types to plot on the trend chart
     if flat_type and flat_type != "ALL":
         df_fl = df_town[df_town["flat_type"] == flat_type]
         types_to_plot = [flat_type] if not df_fl.empty else []
     else:
         types_to_plot = df_town["flat_type"].value_counts().head(4).index.tolist()
 
-    # Quick stats for latest year
     df_l = df_town[df_town["year"] == latest]
     df_p = df_town[df_town["year"] == latest - 1]
     med_l = df_l["resale_price"].median()
@@ -528,8 +539,11 @@ def update_town_detail(clickData, flat_type):
     chg_color = "#27ae60" if chg >= 0 else "#e74c3c"
     chg_arrow = "▲" if chg >= 0 else "▼"
 
+    # Region + estate type metadata
+    region, estate_type, note = TOWN_META.get(town, ("—", "—", ""))
+
     # ── Trend chart ───────────────────────────────────────────────────────────
-    COLORS = ["#2980b9", "#27ae60", "#e67e22", "#8e44ad"]
+    COLORS = ["#0f2885", "#5bc8af", "#e67e22", "#8e44ad"]
     fig = go.Figure()
     for i, ft in enumerate(types_to_plot):
         sub = (
@@ -541,25 +555,23 @@ def update_town_detail(clickData, flat_type):
             x=sub["year"], y=sub["resale_price"],
             mode="lines+markers",
             name=ft.title(),
-            line=dict(color=COLORS[i % 4], width=2),
+            line=dict(color=COLORS[i % 4], width=2.5),
             marker=dict(size=5),
-            hovertemplate=(
-                "<b>%{fullData.name}</b><br>%{x}: $%{y:,.0f}<extra></extra>"
-            ),
+            hovertemplate="<b>%{fullData.name}</b><br>%{x}: $%{y:,.0f}<extra></extra>",
         ))
 
     fig.update_layout(
-        plot_bgcolor="white", paper_bgcolor="white",
-        margin=dict(t=10, b=30, l=55, r=10), height=220,
-        xaxis=dict(tickformat="d", showgrid=True, gridcolor="#f0f0f0", title=""),
+        plot_bgcolor="#fbf8ff", paper_bgcolor="#fbf8ff",
+        margin=dict(t=10, b=30, l=55, r=10), height=210,
+        xaxis=dict(tickformat="d", showgrid=True, gridcolor="#e5e6ff", title=""),
         yaxis=dict(tickprefix="$", tickformat=",", showgrid=True,
-                   gridcolor="#f0f0f0", title=""),
+                   gridcolor="#e5e6ff", title=""),
         legend=dict(orientation="h", yanchor="bottom", y=1.01,
                     xanchor="right", x=1, font=dict(size=9)),
-        font=dict(size=10),
+        font=dict(size=10, family="Inter, sans-serif"),
     )
 
-    # ── Per-flat-type price breakdown ─────────────────────────────────────────
+    # ── Flat-type price breakdown ─────────────────────────────────────────────
     ft_med  = df_l.groupby("flat_type")["resale_price"].median().sort_index()
     prev_ft = df_p.groupby("flat_type")["resale_price"].median()
 
@@ -573,78 +585,98 @@ def update_town_detail(clickData, flat_type):
             chg_el = html.Span(
                 f"{'▲' if ft_chg >= 0 else '▼'}{abs(ft_chg):.1f}%",
                 style={"color": "#27ae60" if ft_chg >= 0 else "#e74c3c",
-                       "fontSize": "0.7rem", "fontWeight": "600"},
+                       "fontSize": "0.68rem", "fontWeight": "600"},
             )
         else:
-            chg_el = html.Span("—", className="text-muted", style={"fontSize": "0.7rem"})
+            chg_el = html.Span("—", style={"fontSize": "0.68rem", "color": "#454652"})
 
         breakdown_rows.append(
             dbc.Row([
-                dbc.Col(html.Span(ft.title(),
-                                  style={"fontSize": "0.78rem"}), width=5),
-                dbc.Col(html.Span(f"${p:,.0f}",
-                                  className="fw-semibold",
+                dbc.Col(html.Span(ft.title(), style={"fontSize": "0.78rem"}), width=5),
+                dbc.Col(html.Span(f"${p:,.0f}", className="fw-semibold",
                                   style={"fontSize": "0.78rem"}), width=4),
                 dbc.Col(chg_el, width=3, className="text-end"),
-            ], className="py-1 border-bottom align-items-center")
+            ], className="py-2 align-items-center",
+               style={"borderBottom": "1px solid rgba(197,197,212,0.18)"})
         )
 
-    return dbc.Card(
-        dbc.CardBody([
-            html.H6(f"📍 {town.title()}", className="fw-bold mb-3"),
+    return html.Div(
+        [
+            # Town name + badges
+            html.Div(
+                html.H5(town.title(), className="fw-bold mb-1",
+                        style={"fontFamily": "'Manrope', sans-serif",
+                               "color": "#08154d", "letterSpacing": "-0.01em"}),
+            ),
+            html.Div(
+                [
+                    html.Span(region, className="town-badge-region"),
+                    html.Span(estate_type, className="town-badge-type"),
+                ],
+                className="mb-3",
+            ),
 
             # Mini stat row
             dbc.Row([
                 dbc.Col([
-                    html.P("Median Price", className="text-muted mb-0",
-                           style={"fontSize": "0.67rem", "textTransform": "uppercase",
-                                  "fontWeight": "700", "letterSpacing": "0.04em"}),
-                    html.H5(f"${med_l:,.0f}", className="fw-bold mb-0"),
+                    html.Div("Median Price", className="kpi-label"),
+                    html.Div(f"${med_l:,.0f}",
+                             style={"fontFamily": "'Manrope', sans-serif",
+                                    "fontSize": "1.6rem", "fontWeight": "800",
+                                    "color": "#08154d", "letterSpacing": "-0.02em",
+                                    "lineHeight": "1.1"}),
                     html.Span(
                         f"{chg_arrow} {abs(chg):.1f}% vs {latest - 1}",
-                        style={"color": chg_color, "fontSize": "0.72rem",
-                               "fontWeight": "600"},
+                        style={"color": chg_color, "fontSize": "0.74rem", "fontWeight": "600"},
                     ),
                 ], width=7),
                 dbc.Col([
-                    html.P(f"Txns ({latest})", className="text-muted mb-0",
-                           style={"fontSize": "0.67rem", "textTransform": "uppercase",
-                                  "fontWeight": "700", "letterSpacing": "0.04em"}),
-                    html.H5(f"{vol:,}", className="fw-bold mb-0"),
+                    html.Div(f"Txns ({latest})", className="kpi-label"),
+                    html.Div(f"{vol:,}",
+                             style={"fontFamily": "'Manrope', sans-serif",
+                                    "fontSize": "1.6rem", "fontWeight": "800",
+                                    "color": "#08154d", "letterSpacing": "-0.02em",
+                                    "lineHeight": "1.1"}),
                 ], width=5),
             ], className="mb-3"),
 
-            # Trend chart
-            html.P("Median price trend by flat type",
-                   className="text-muted mb-1",
-                   style={"fontSize": "0.67rem", "textTransform": "uppercase",
-                          "fontWeight": "700", "letterSpacing": "0.04em"}),
-            dcc.Graph(figure=fig, config={"displayModeBar": False},
-                      style={"height": "220px"}),
+            # Town note
+            html.P(note, style={"fontSize": "0.78rem", "color": "#454652",
+                                 "lineHeight": "1.5", "marginBottom": "1rem"}),
 
-            # Flat-type breakdown table
-            html.P(f"Median price by flat type ({latest})",
-                   className="text-muted mt-2 mb-1",
-                   style={"fontSize": "0.67rem", "textTransform": "uppercase",
-                          "fontWeight": "700", "letterSpacing": "0.04em"}),
+            # Trend chart
+            html.Div("Median price trend by flat type", className="kpi-label mb-1"),
+            dcc.Graph(figure=fig, config={"displayModeBar": False},
+                      style={"height": "210px"}),
+
+            # Flat-type breakdown
+            html.Div(f"Median price by flat type ({latest})", className="kpi-label mt-3 mb-1"),
             dbc.Row([
-                dbc.Col(html.Span("Type", className="text-muted",
-                                  style={"fontSize": "0.7rem"}), width=5),
-                dbc.Col(html.Span("Median", className="text-muted",
-                                  style={"fontSize": "0.7rem"}), width=4),
-                dbc.Col(html.Span("YoY", className="text-muted",
-                                  style={"fontSize": "0.7rem"}), width=3,
+                dbc.Col(html.Span("Type", style={"fontSize": "0.68rem", "color": "#454652"}), width=5),
+                dbc.Col(html.Span("Median", style={"fontSize": "0.68rem", "color": "#454652"}), width=4),
+                dbc.Col(html.Span("YoY", style={"fontSize": "0.68rem", "color": "#454652"}), width=3,
                         className="text-end"),
-            ], className="pb-1 border-bottom"),
+            ], className="pb-1",
+               style={"borderBottom": "1px solid rgba(197,197,212,0.35)"}),
             html.Div(
                 breakdown_rows or [
                     html.P("No data for selected flat type.",
-                           className="text-muted small mt-1")
+                           style={"fontSize": "0.82rem", "color": "#454652", "marginTop": "0.5rem"})
                 ]
             ),
-        ]),
-        className="shadow-sm h-100",
-        style={"border": "none", "borderRadius": "10px", "minHeight": "490px"},
+
+            # CTA
+            dbc.Button(
+                "Value a Flat in This Area →",
+                href="/flat-valuation",
+                className="btn-cta w-100 mt-3",
+                style={"fontSize": "0.82rem"},
+            ),
+        ],
+        style={
+            "background": "#f4f2ff", "borderRadius": "12px",
+            "padding": "1.5rem", "minHeight": "490px",
+        },
     )
 
 
