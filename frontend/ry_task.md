@@ -1,180 +1,255 @@
-We want to add a new page to the app called **Flat Amenities Comparison**.
+Start by reading `progress.md` and `claude.md` carefully to understand project context, previous implementation progress, design intentions, constraints, pending tasks, and any repo-specific instructions. Then inspect the existing codebase structure in detail before making changes. You must build on top of the current code structure, reuse existing components/routes/styles/utilities where sensible, and avoid rewriting from scratch unless something is clearly broken or unusable. If required data is missing, create realistic mock data and wire the UI cleanly so it can be swapped with real data sources later.
 
-First, study the current codebase and understand:
-- the existing React app structure
-- routing conventions
-- shared layout/components
-- styling system and design tokens
-- how existing pages are organized
+Your task is to build a React web app for a Singapore HDB resale decision-support product using the attached mockups and the design language from `DESIGN.md`.
 
-Use the app’s current design system first. Do not introduce a completely different visual style. The page should structurally resemble a side-by-side comparison table like the provided reference image, but adapted to the current app styling.
+The visual direction is a premium editorial property intelligence product, not a generic dashboard. The design system is “The Architectural Ledger”: deep oceanic blue primary (`#00145d`), crisp soft-white and pale-lavender surfaces, strong editorial typography, tonal layering instead of visible borders, subtle gradients for key CTAs, lots of breathing room, intentional asymmetry, and a calm high-trust aesthetic. Avoid default dashboard patterns, divider-heavy layouts, harsh boxes, cheap shadows, and generic UI kits. Follow these design rules closely:
+- no 1px section borders for layout separation
+- define structure mainly through background tone shifts
+- use layered surfaces instead of card-overload
+- use large, authoritative typography for hero titles, values, and price signals
+- keep metadata quieter and highly readable
+- inputs should be minimalist with soft filled backgrounds, not bordered form controls
+- primary CTAs should use a subtle blue gradient
+- use shadows only when something genuinely floats
+- preserve a spacious, premium layout throughout
 
-## Goal
-Build a **frontend-only** page for comparing nearby amenities across up to **3 flats**, using **mock data for now**.
+Build the app as if it were a polished front-end prototype ready for a real product team to continue.
 
-## Main behavior
-The page should let users input a **Singapore 6-digit postal code**. When a valid postal code is entered:
-- add that flat as a new comparison column
-- retrieve mock flat metadata from a mock dataset
-- display the flat’s:
-  - block + street name
-  - postal code
+## High-level objective
+Create a navigable React app with a coherent design system and these main product surfaces:
+1. Landing / User Guide
+2. Market Analysis
+3. Flat Amenities
+4. Flat Valuation
 
-The comparison should support a **maximum of 3 flats**.
-- Once 3 flats are added, disable the input box
-- Keep the input visible, but show a clear message such as “Maximum of 3 flats compared”
-- Each compared flat should have a **remove button**
-- Removing a flat should free up a slot and re-enable input if below 3
+## Working process requirements
+Before coding:
+1. Read `progress.md`
+2. Read `claude.md`
+3. Inspect the current repo structure
+4. Identify reusable existing code
+5. Decide what should be extended vs newly created
+6. Create a short implementation plan
+7. Then begin building
 
-If the postal code is not found in the mock dataset:
-- show an inline validation/error message: **“Postal code not found”**
+While building:
+- prefer incremental changes over wholesale rewrites
+- preserve existing architecture where possible
+- create reusable components instead of page-specific duplication
+- use mock data only where real data is unavailable
+- keep the codebase easy to extend for future APIs and map integrations
 
-## UI structure
-Build the page as a **side-by-side comparison table** similar to the reference screenshot:
-- first column = metric labels
-- next columns = compared flats
-- maximum 3 flat columns
+## Technical requirements
+- Use React
+- Use the repo’s existing stack, conventions, and component patterns where possible
+- Keep the app modular and production-oriented
+- Use clean routing for major pages
+- Organize code clearly across pages, shared components, mock data, utils, and styles
+- Do not hardcode everything directly into page files
+- If there is an existing design token/theme layer, integrate with it
+- If there is no clear design system in code yet, establish one lightly and consistently
 
-Add a top input area with:
+## Pages and expected UX
+
+### 1. Landing / User Guide page
+Build a premium landing page that introduces the product clearly.
+
+Include:
+- top navigation bar
+- brand identity aligned with the mockups
+- strong hero section with headline, subheadline, and CTA
+- supporting visual or image treatment
+- feature overview for:
+  - Market Analysis
+  - Flat Amenities
+  - Flat Valuation
+- polished footer or lower informational section
+
+Design goals:
+- immediate trust and clarity
+- editorial, clean, premium
+- not crowded
+- strong first impression
+
+### 2. Market Analysis page
+Build a town-level market exploration page inspired by the mockups.
+
+Include:
+- town search input
+- main visual area for a stylized map / heatmap / region selection interface
+- a selected-town panel that shows:
+  - selected region/town name
+  - broad descriptor such as region / estate type
+  - median price
+  - recent transaction count
+  - price by flat type
+  - 12-month trend
+  - optional development notes or area facts
+- CTA to drill deeper, such as “View Listed Properties” or similar placeholder
+
+Behavior:
+- selecting a town updates the side panel
+- use believable mock market data
+- maintain a spacious visual layout, not a cramped analytics page
+
+### 3. Flat Amenities page
+Build a comparison tool for shortlisted flats.
+
+Include:
 - postal code input
-- add button
-- clear feedback/error state
-- selected compared flats represented clearly in the table itself
+- “Add Flat” interaction
+- support for comparing multiple flats
+- a premium comparison matrix showing amenity access for each flat
+- rows such as:
+  - MRT Station
+  - Shopping Mall
+  - Sports Hall
+  - Medical Facility
+  - Hawker Centre
+- each cell should show nearest amenity name plus distance/travel time
+- clearly label the best flat for each row where applicable
+- “View on Map” affordances
+- lower sections for category-specific nearby amenities, for example:
+  - Primary Schools within 1KM
+  - Parks & Recreation within 1KM
+- elegant comparison layout with strong readability
 
-Page title:
-- **Flat Amenities Comparison**
+Behavior:
+- user can add comparison flats from mock data by postal code
+- comparison table updates based on selected flats
+- lower amenity sections update accordingly
 
-No need to optimize for mobile. Desktop-first is fine.
+### 4. Flat Valuation page
+Build a valuation workflow page with an input panel and comparables.
 
-## Metrics to compare
+Include:
+- left-side valuation input panel
+- fields for:
+  - flat type
+  - postal code
+  - flat size (sqm)
+  - lease left (years)
+  - floor level
+  - optional listed price
+- primary action button such as “Search & Calculate”
+- result card showing:
+  - estimated current value
+  - recent growth or directional signal
+  - valuation confidence
+- right-side comparables list showing:
+  - block / comparable name
+  - transacted price
+  - floor area
+  - transaction date
+  - floor range
+  - lease left
+  - relative difference vs estimate
+- supporting summary such as area median price
+- optional center canvas for reserved map or geographic/price visualization
 
-### A. Nearest amenity categories
-For each flat, show the following nearest amenity categories:
-- MRT station
-- Mall
-- Sports hall
-- Polyclinic/Hospital
-- Hawker centre
+Behavior:
+- form submission populates valuation output and comparable transactions from mock data
+- valuation result should feel believable and coherent with comparable records
+- design should match the premium system, not default form-plus-cards UI
 
-For each of the above, display:
-- first line: distance and walking time in the format  
-  `0.5 km | 10 mins`
-- second line: amenity name
-
-Assume walking speed is:
-- **1 km = 20 minutes**
-
-Walking time should be:
-- computed from distance
-- rounded to the nearest whole minute
-
-If no amenity exists for that category in the mock data, show:
-- **No amenity found**
-
-### B. Amenities within 1 km
-For each flat, also show:
-
-- Primary schools within 1 km
-- Parks within 1 km
-
-Display:
-- count first
-- then the names
-
-Since names are important, include them in the cell.
-If there are more than 5 entries:
-- truncate the visible list
-- reveal the full list via a **tooltip**
-
-## Ranking and highlighting logic
-For nearest-amenity rows:
-- the flat with the **smallest distance** is the best
-
-For “within 1 km” rows:
-- the flat with the **largest count** is the best
-
-If there is a tie:
-- highlight all tied best values
-
-Use the same logic as the reference image:
-- highlight the best cell in green
-- also show a small green **“Best”** pill/badge inside that cell
-
-There is **no overall score** on this page.
+## Reusable components to create or refine
+Create reusable components wherever appropriate, such as:
+- AppShell / top navigation
+- page header / section header
+- premium button variants
+- search field
+- soft filled form input
+- select dropdown
+- metric display block
+- comparison matrix row
+- amenity card/list group
+- comparable transaction card
+- selected area side panel
+- chart wrapper
+- floating utility button
+- chip / tag
+- empty state / loading skeleton
+- map placeholder container
 
 ## Mock data requirements
-Since the real data does not exist yet, create a mock dataset file for this page.
+If real data is unavailable, create realistic Singapore HDB-themed mock data in separate files.
 
-The mock dataset should include:
-- a small set of valid Singapore-style 6-digit postal codes
-- each postal code maps to:
-  - block number
-  - street name
-  - postal code
-  - nearest MRT station name + distance
-  - nearest mall name + distance
-  - nearest sports hall name + distance
-  - nearest polyclinic/hospital name + distance
-  - nearest hawker centre name + distance
-  - list of primary schools within 1 km
-  - list of parks within 1 km
+Include mock datasets for:
+- towns and market summaries
+- area price trends
+- flat-type price breakdowns
+- amenity proximity data by postal code / flat
+- nearby schools, parks, recreation, malls, MRTs, etc.
+- valuation outputs
+- comparable transactions
+- area-level price summaries
 
-Use realistic-looking Singapore examples where possible, but keep it obviously mock/demo data in code comments or naming.
+The mock data should be:
+- structured
+- reusable
+- believable
+- easy to replace later
 
-## Engineering constraints
-- Frontend UI first only
-- No backend integration yet
-- Use mock dataset and local state
-- Follow existing project patterns and naming conventions
-- Reuse existing shared components if appropriate
-- Keep code modular and readable
-- Avoid unnecessary abstraction
-- Do not add reordering functionality
-- Do not add mobile-specific work unless it is already easy within the current layout system
+## Styling requirements
+Translate `DESIGN.md` into actual UI decisions.
 
-## Expected UX flow
-1. User lands on Flat Amenities Comparison page
-2. User enters a valid 6-digit postal code
-3. Matching flat is added as a comparison column
-4. User can add up to 3 flats
-5. Best values are highlighted row by row
-6. User can remove a flat column
-7. Invalid postal codes show “Postal code not found”
+Specifically:
+- use tonal surfaces to separate sections instead of visible borders
+- avoid generic white cards everywhere
+- keep list separation mostly through spacing and hover tone shifts
+- use soft pale backgrounds for sidebars, panels, and grouped sections
+- use deep blue for major emphasis and trust anchors
+- use gradient fills sparingly on primary CTAs or premium callouts
+- use ghost-border treatment only if needed for accessibility or focus state
+- ensure typography hierarchy is strong and intentional
+- keep spacing generous between major sections
 
-## Implementation expectations
-Before writing code:
-1. inspect the existing codebase
-2. identify the best route/page location for this new page
-3. identify reusable UI patterns/components already present
-4. propose a short implementation plan
+## Code quality requirements
+- read the existing repo before implementing
+- do not duplicate logic unnecessarily
+- name components clearly
+- keep page composition understandable
+- separate layout, presentation, and data concerns sensibly
+- leave comments only where helpful, not everywhere
+- make future API replacement straightforward
+- do not leave the app in a hacked-together prototype state
 
-Then implement:
-- the page
-- the mock dataset
-- any helper functions needed, such as:
-  - walking time formatter
-  - best-value detection
-  - tooltip truncation logic
+## Execution sequence
+Follow this sequence:
+1. Read `progress.md`
+2. Read `claude.md`
+3. Inspect repo structure and current implementation
+4. Summarize current state briefly
+5. Create implementation plan
+6. Build shared design primitives if needed
+7. Build or refine navigation and app shell
+8. Build Landing / User Guide page
+9. Build Market Analysis page
+10. Build Flat Amenities page
+11. Build Flat Valuation page
+12. Add mock data and connect interactions
+13. Polish spacing, typography, and consistency
+14. Check responsiveness for desktop-first behavior
+15. Review for visual consistency against mockups and `DESIGN.md`
 
-## Deliverables
-Please provide:
-1. a short implementation plan
-2. the files you will add or modify
-3. the actual code
-4. a brief explanation of how the mock dataset is structured
-5. any assumptions made
+## Definition of done
+The task is complete only when:
+- all four key pages exist and are navigable
+- the app matches the premium editorial design language
+- the pages resemble the supplied mockups in structure and feel
+- the app builds on the existing repo rather than replacing it blindly
+- mock data is added where necessary
+- the core interactions work with local state
+- components are reusable and code is organized cleanly
+- the result feels like a serious product prototype, not a rough student front end
 
-Use the current app’s design system first, but make the layout clearly resemble a clean side-by-side comparison table like the reference image.
+## Final output requirements
+When finished, provide:
+1. a concise summary of what was built
+2. key files created or modified
+3. assumptions made
+4. where mock data was introduced
+5. anything left as a placeholder for future real backend / map integration
 
-Do not start coding immediately.
-First give:
-1. the route/page you plan to create
-2. the component structure
-3. the mock data shape
-4. the table row definitions
-Wait for approval before implementing.
-
-Read CLAUDE.md and PROGRESS.md.
-Then read TASK.md and propose a plan before coding.
-
-create a PROGRESS.md in frontend folder to track progress, start by looking at the current existing code and adding the detail inside, then write in the new additions.
+Important:
+Do not drift into a generic admin dashboard look. Keep pushing the implementation toward a premium, editorial, architectural-property aesthetic with strong hierarchy, tonal depth, clean layering, and elegant restraint.

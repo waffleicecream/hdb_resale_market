@@ -1,6 +1,6 @@
 # PROGRESS.md — HDB Resale Market Project
 
-_Last updated: 2026-03-19_
+_Last updated: 2026-03-20_
 
 ---
 
@@ -22,7 +22,6 @@ All 5 notebooks are implemented and have been run at least once:
    - `outputs/town_cagr_by_flat.csv`
    - `outputs/town_choropleth.geojson`
    - `outputs/national_cagr_benchmarks.json`
-
 ---
 
 ## What's Pending / Next Steps
