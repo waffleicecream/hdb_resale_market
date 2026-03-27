@@ -1,0 +1,55 @@
+station_name,line,line_code,town,expected_year,status,notes
+Keppel,Circle Line,CCL,BUKIT MERAH,2026,Under construction,CCL Stage 6 - closes the Circle Line loop
+Cantonment,Circle Line,CCL,BUKIT MERAH,2026,Under construction,CCL Stage 6
+Prince Edward Road,Circle Line,CCL,BUKIT MERAH,2026,Under construction,CCL Stage 6
+Bedok South,Thomson-East Coast Line,TEL,BEDOK,2026,Under construction,TEL Stage 5
+Sungei Bedok,Thomson-East Coast Line,TEL,BEDOK,2026,Under construction,TEL Stage 5 - interchange with DTL
+Xilin,Downtown Line,DTL,BEDOK,2026,Under construction,DTL Stage 3 Extension
+Woodlands North (RTS),RTS Link,RTS,WOODLANDS,2026,Under construction,Cross-border link to Johor Bahru Bukit Chagar; connects to TEL
+Choa Chu Kang West,Jurong Region Line,JRL,CHOA CHU KANG,2027,Under construction,JRL Phase 1 - station name subject to LTA confirmation
+Tengah,Jurong Region Line,JRL,TENGAH,2027,Under construction,JRL Phase 1 - station name subject to LTA confirmation
+Tengah Park,Jurong Region Line,JRL,TENGAH,2027,Under construction,JRL Phase 1 - station name subject to LTA confirmation
+Bukit Batok West,Jurong Region Line,JRL,BUKIT BATOK,2027,Under construction,JRL Phase 1 - station name subject to LTA confirmation
+Tawas,Jurong Region Line,JRL,JURONG WEST,2027,Under construction,JRL Phase 1 - station name subject to LTA confirmation
+Jurong West,Jurong Region Line,JRL,JURONG WEST,2027,Under construction,JRL Phase 1 - station name subject to LTA confirmation
+Bahar Junction,Jurong Region Line,JRL,JURONG WEST,2027,Under construction,JRL Phase 1 - interchange with EWL at Boon Lay; station name subject to LTA confirmation
+Boon Lay,Jurong Region Line,JRL,JURONG WEST,2027,Under construction,JRL Phase 1 - interchange with EWL; station name subject to LTA confirmation
+Enterprise,Jurong Region Line,JRL,JURONG WEST,2027,Under construction,JRL Phase 1 - station name subject to LTA confirmation
+Tukang,Jurong Region Line,JRL,JURONG WEST,2027,Under construction,JRL Phase 1 - station name subject to LTA confirmation
+Founders' Memorial,Thomson-East Coast Line,TEL,KALLANG,2028,Under construction,TEL infill station between Gardens by the Bay and Tanjong Rhu; opens with Founders' Memorial
+Tengah Central,Jurong Region Line,JRL,TENGAH,2028,Under construction,JRL Phase 2 - station name subject to LTA confirmation
+Nanyang Crescent,Jurong Region Line,JRL,JURONG WEST,2028,Under construction,JRL Phase 2 - station name subject to LTA confirmation
+Pandan Reservoir,Jurong Region Line,JRL,CLEMENTI,2028,Under construction,JRL Phase 2 terminal - station name subject to LTA confirmation
+Nanyang,Jurong Region Line,JRL,JURONG WEST,2028,Under construction,JRL Phase 2 - serves NTU; station name subject to LTA confirmation
+Gek Poh,Jurong Region Line,JRL,JURONG WEST,2028,Under construction,JRL Phase 2 - station name subject to LTA confirmation
+Taman Jurong,Jurong Region Line,JRL,JURONG WEST,2028,Under construction,JRL Phase 2 - station name subject to LTA confirmation
+Peng Kang Hill,Jurong Region Line,JRL,JURONG WEST,2028,Under construction,JRL Phase 2 terminal - station name subject to LTA confirmation
+Jurong Pier,Jurong Region Line,JRL,JURONG WEST,2029,Under construction,JRL Phase 3 terminal - station name subject to LTA confirmation
+NTU,Jurong Region Line,JRL,JURONG WEST,2029,Under construction,JRL Phase 3 - serves Nanyang Technological University; station name subject to LTA confirmation
+Boon Lay South,Jurong Region Line,JRL,JURONG WEST,2029,Under construction,JRL Phase 3 - station name subject to LTA confirmation
+Gek Poh South,Jurong Region Line,JRL,JURONG WEST,2029,Under construction,JRL Phase 3 - station name subject to LTA confirmation
+Bukit Batok South,Jurong Region Line,JRL,BUKIT BATOK,2029,Under construction,JRL Phase 3 - station name subject to LTA confirmation
+Aviation Park,Cross Island Line,CRL,PASIR RIS,2030,Under construction,CRL Phase 1 eastern terminal
+Loyang,Cross Island Line,CRL,PASIR RIS,2030,Under construction,CRL Phase 1
+Pasir Ris,Cross Island Line,CRL,PASIR RIS,2030,Under construction,CRL Phase 1 - interchange with EWL and CPE
+Riviera,Cross Island Line,CRL,HOUGANG,2030,Under construction,CRL Phase 1
+Hougang,Cross Island Line,CRL,HOUGANG,2030,Under construction,CRL Phase 1 - interchange with NEL
+Defu,Cross Island Line,CRL,HOUGANG,2030,Under construction,CRL Phase 1 - serves new Defu housing precinct
+Serangoon North,Cross Island Line,CRL,SERANGOON,2030,Under construction,CRL Phase 1
+Tavistock,Cross Island Line,CRL,ANG MO KIO,2030,Under construction,CRL Phase 1
+Ang Mo Kio,Cross Island Line,CRL,ANG MO KIO,2030,Under construction,CRL Phase 1 - interchange with NSL
+Teck Ghee,Cross Island Line,CRL,ANG MO KIO,2030,Under construction,CRL Phase 1
+Bright Hill,Cross Island Line,CRL,BISHAN,2030,Under construction,CRL Phase 1 western terminal of Phase 1 - interchange with TEL
+Punggol North,Cross Island Line,CRL,PUNGGOL,2032,Under construction,CRL Punggol Extension
+Rivervale,Cross Island Line,CRL,SENGKANG,2032,Under construction,CRL Punggol Extension
+Punggol,Cross Island Line,CRL,PUNGGOL,2032,Under construction,CRL Punggol Extension - interchange with NEL and Punggol LRT
+Turf City,Cross Island Line,CRL,BISHAN,2032,Under construction,CRL Phase 2
+King Albert Park,Cross Island Line,CRL,BUKIT TIMAH,2032,Under construction,CRL Phase 2 - interchange with DTL
+Maju,Cross Island Line,CRL,CLEMENTI,2032,Under construction,CRL Phase 2
+Clementi,Cross Island Line,CRL,CLEMENTI,2032,Under construction,CRL Phase 2 - interchange with EWL
+West Coast,Cross Island Line,CRL,CLEMENTI,2032,Under construction,CRL Phase 2
+Jurong Lake District,Cross Island Line,CRL,JURONG EAST,2032,Under construction,CRL Phase 2 western terminal - serves JLD
+Brickland,North-South Line,NSL,BUKIT BATOK,2034,Confirmed,NSL infill station between Bukit Gombak and Choa Chu Kang
+Sungei Kadut,North-South Line,NSL,WOODLANDS,2035,Confirmed,NSL infill station between Yew Tee and Kranji
+Mount Pleasant,Thomson-East Coast Line,TEL,TOA PAYOH,,Proposed,TEL infill station between Caldecott and Stevens; no confirmed timeline
+Marina South,Thomson-East Coast Line,TEL,MARINA SOUTH,,Proposed,TEL infill station between Marina Bay and Gardens by the Bay; no confirmed timeline

@@ -1,0 +1,752 @@
+{
+  "ANG MO KIO": {
+    "mrt_stations": [
+      {
+        "station_name": "Tavistock",
+        "line": "Cross Island Line",
+        "line_code": "CRL",
+        "expected_year": 2030,
+        "status": "Under construction",
+        "lat": 1.3701972380126186,
+        "lon": 103.86327814413596,
+        "notes": "CRL Phase 1"
+      },
+      {
+        "station_name": "Ang Mo Kio",
+        "line": "Cross Island Line",
+        "line_code": "CRL",
+        "expected_year": 2030,
+        "status": "Under construction",
+        "lat": 1.369948659219826,
+        "lon": 103.84961635294518,
+        "notes": "CRL Phase 1 - interchange with NSL"
+      },
+      {
+        "station_name": "Teck Ghee",
+        "line": "Cross Island Line",
+        "line_code": "CRL",
+        "expected_year": 2030,
+        "status": "Under construction",
+        "lat": 1.3655366015365205,
+        "lon": 103.84360463817544,
+        "notes": "CRL Phase 1"
+      }
+    ],
+    "transport_hubs": []
+  },
+  "BEDOK": {
+    "mrt_stations": [
+      {
+        "station_name": "Bedok South",
+        "line": "Thomson-East Coast Line",
+        "line_code": "TEL",
+        "expected_year": 2026,
+        "status": "Under construction",
+        "lat": 1.3166456856882618,
+        "lon": 103.94923038001318,
+        "notes": "TEL Stage 5"
+      },
+      {
+        "station_name": "Sungei Bedok",
+        "line": "Thomson-East Coast Line",
+        "line_code": "TEL",
+        "expected_year": 2026,
+        "status": "Under construction",
+        "lat": 1.3203959599740995,
+        "lon": 103.9572076207986,
+        "notes": "TEL Stage 5 - interchange with DTL"
+      },
+      {
+        "station_name": "Xilin",
+        "line": "Downtown Line",
+        "line_code": "DTL",
+        "expected_year": 2026,
+        "status": "Under construction",
+        "lat": 1.328734540243039,
+        "lon": 103.96486806284406,
+        "notes": "DTL Stage 3 Extension"
+      }
+    ],
+    "transport_hubs": [
+      {
+        "hub_name": "Bedok South Integrated Transport Hub",
+        "hub_type": "Integrated Transport Hub",
+        "expected_year": null,
+        "status": "Proposed",
+        "notes": "As per URA Master Plan 2019"
+      }
+    ]
+  },
+  "BISHAN": {
+    "mrt_stations": [
+      {
+        "station_name": "Bright Hill",
+        "line": "Cross Island Line",
+        "line_code": "CRL",
+        "expected_year": 2030,
+        "status": "Under construction",
+        "lat": 1.363375806807979,
+        "lon": 103.83610947901916,
+        "notes": "CRL Phase 1 western terminal of Phase 1 - interchange with TEL"
+      },
+      {
+        "station_name": "Turf City",
+        "line": "Cross Island Line",
+        "line_code": "CRL",
+        "expected_year": 2032,
+        "status": "Under construction",
+        "lat": 1.3409139926581004,
+        "lon": 103.79442676751876,
+        "notes": "CRL Phase 2"
+      }
+    ],
+    "transport_hubs": [
+      {
+        "hub_name": "Bishan Integrated Transport Hub",
+        "hub_type": "Integrated Transport Hub",
+        "expected_year": null,
+        "status": "Proposed",
+        "notes": "As per URA Draft Master Plan 2025"
+      }
+    ]
+  },
+  "BUKIT BATOK": {
+    "mrt_stations": [
+      {
+        "station_name": "Bukit Batok West",
+        "line": "Jurong Region Line",
+        "line_code": "JRL",
+        "expected_year": 2027,
+        "status": "Under construction",
+        "lat": 1.3456739510149516,
+        "lon": 103.7395019676103,
+        "notes": "JRL Phase 1 - station name subject to LTA confirmation"
+      },
+      {
+        "station_name": "Bukit Batok South",
+        "line": "Jurong Region Line",
+        "line_code": "JRL",
+        "expected_year": 2029,
+        "status": "Under construction",
+        "lat": null,
+        "lon": null,
+        "notes": "JRL Phase 3 - station name subject to LTA confirmation"
+      },
+      {
+        "station_name": "Brickland",
+        "line": "North-South Line",
+        "line_code": "NSL",
+        "expected_year": 2034,
+        "status": "Confirmed",
+        "lat": 1.3684011947216186,
+        "lon": 103.749676524253,
+        "notes": "NSL infill station between Bukit Gombak and Choa Chu Kang"
+      }
+    ],
+    "transport_hubs": []
+  },
+  "BUKIT MERAH": {
+    "mrt_stations": [
+      {
+        "station_name": "Keppel",
+        "line": "Circle Line",
+        "line_code": "CCL",
+        "expected_year": 2026,
+        "status": "Under construction",
+        "lat": 1.2701719539198713,
+        "lon": 103.83029594184094,
+        "notes": "CCL Stage 6 - closes the Circle Line loop"
+      },
+      {
+        "station_name": "Cantonment",
+        "line": "Circle Line",
+        "line_code": "CCL",
+        "expected_year": 2026,
+        "status": "Under construction",
+        "lat": 1.2730817331802042,
+        "lon": 103.8367402503118,
+        "notes": "CCL Stage 6"
+      },
+      {
+        "station_name": "Prince Edward Road",
+        "line": "Circle Line",
+        "line_code": "CCL",
+        "expected_year": 2026,
+        "status": "Under construction",
+        "lat": 1.2732407280310234,
+        "lon": 103.84726563653462,
+        "notes": "CCL Stage 6"
+      }
+    ],
+    "transport_hubs": [
+      {
+        "hub_name": "Tiong Bahru Integrated Transport Hub",
+        "hub_type": "Integrated Transport Hub",
+        "expected_year": null,
+        "status": "Proposed",
+        "notes": "As per URA Master Plan 2019"
+      }
+    ]
+  },
+  "BUKIT TIMAH": {
+    "mrt_stations": [
+      {
+        "station_name": "King Albert Park",
+        "line": "Cross Island Line",
+        "line_code": "CRL",
+        "expected_year": 2032,
+        "status": "Under construction",
+        "lat": 1.3338187107983213,
+        "lon": 103.78237636303498,
+        "notes": "CRL Phase 2 - interchange with DTL"
+      }
+    ],
+    "transport_hubs": [
+      {
+        "hub_name": "Beauty World Integrated Transport Hub",
+        "hub_type": "Integrated Transport Hub",
+        "expected_year": 2028,
+        "status": "Under construction",
+        "notes": "Part of mixed-use Bukit V Mall development at Beauty World"
+      },
+      {
+        "hub_name": "Turf City Integrated Transport Hub",
+        "hub_type": "Integrated Transport Hub",
+        "expected_year": null,
+        "status": "Proposed",
+        "notes": "As per URA Draft Master Plan 2025; verify town boundary against shapefile"
+      }
+    ]
+  },
+  "CHOA CHU KANG": {
+    "mrt_stations": [
+      {
+        "station_name": "Choa Chu Kang West",
+        "line": "Jurong Region Line",
+        "line_code": "JRL",
+        "expected_year": 2027,
+        "status": "Under construction",
+        "lat": 1.3792210090842536,
+        "lon": 103.74001342904069,
+        "notes": "JRL Phase 1 - station name subject to LTA confirmation"
+      }
+    ],
+    "transport_hubs": [
+      {
+        "hub_name": "Choa Chu Kang Integrated Transport Hub",
+        "hub_type": "Integrated Transport Hub",
+        "expected_year": null,
+        "status": "Proposed",
+        "notes": "As per URA Draft Master Plan 2025"
+      }
+    ]
+  },
+  "CLEMENTI": {
+    "mrt_stations": [
+      {
+        "station_name": "Pandan Reservoir",
+        "line": "Jurong Region Line",
+        "line_code": "JRL",
+        "expected_year": 2028,
+        "status": "Under construction",
+        "lat": 1.320458223153171,
+        "lon": 103.7448007651914,
+        "notes": "JRL Phase 2 terminal - station name subject to LTA confirmation"
+      },
+      {
+        "station_name": "Maju",
+        "line": "Cross Island Line",
+        "line_code": "CRL",
+        "expected_year": 2032,
+        "status": "Under construction",
+        "lat": 1.3281487684997983,
+        "lon": 103.7769245837171,
+        "notes": "CRL Phase 2"
+      },
+      {
+        "station_name": "Clementi",
+        "line": "Cross Island Line",
+        "line_code": "CRL",
+        "expected_year": 2032,
+        "status": "Under construction",
+        "lat": 1.3167847097204657,
+        "lon": 103.765974861089,
+        "notes": "CRL Phase 2 - interchange with EWL"
+      },
+      {
+        "station_name": "West Coast",
+        "line": "Cross Island Line",
+        "line_code": "CRL",
+        "expected_year": 2032,
+        "status": "Under construction",
+        "lat": 1.3105599161973904,
+        "lon": 103.7582663586318,
+        "notes": "CRL Phase 2"
+      }
+    ],
+    "transport_hubs": []
+  },
+  "HOUGANG": {
+    "mrt_stations": [
+      {
+        "station_name": "Riviera",
+        "line": "Cross Island Line",
+        "line_code": "CRL",
+        "expected_year": 2030,
+        "status": "Under construction",
+        "lat": 1.394636478607641,
+        "lon": 103.91622379000934,
+        "notes": "CRL Phase 1"
+      },
+      {
+        "station_name": "Hougang",
+        "line": "Cross Island Line",
+        "line_code": "CRL",
+        "expected_year": 2030,
+        "status": "Under construction",
+        "lat": 1.3714546590268426,
+        "lon": 103.8923500698093,
+        "notes": "CRL Phase 1 - interchange with NEL"
+      },
+      {
+        "station_name": "Defu",
+        "line": "Cross Island Line",
+        "line_code": "CRL",
+        "expected_year": 2030,
+        "status": "Under construction",
+        "lat": 1.362340217706898,
+        "lon": 103.89899601290712,
+        "notes": "CRL Phase 1 - serves new Defu housing precinct"
+      }
+    ],
+    "transport_hubs": [
+      {
+        "hub_name": "Hougang Central Integrated Transport Hub",
+        "hub_type": "Integrated Transport Hub",
+        "expected_year": null,
+        "status": "Proposed",
+        "notes": "As per URA Master Plan 2019"
+      }
+    ]
+  },
+  "JURONG EAST": {
+    "mrt_stations": [
+      {
+        "station_name": "Jurong Lake District",
+        "line": "Cross Island Line",
+        "line_code": "CRL",
+        "expected_year": 2032,
+        "status": "Under construction",
+        "lat": 1.3271604433801358,
+        "lon": 103.73981250483112,
+        "notes": "CRL Phase 2 western terminal - serves JLD"
+      }
+    ],
+    "transport_hubs": [
+      {
+        "hub_name": "Jurong East Integrated Transport Hub",
+        "hub_type": "Integrated Transport Hub",
+        "expected_year": 2027,
+        "status": "Under construction",
+        "notes": "Also known as Jurong Gateway Hub; part of Jurong Lake District transformation"
+      }
+    ]
+  },
+  "JURONG WEST": {
+    "mrt_stations": [
+      {
+        "station_name": "Tawas",
+        "line": "Jurong Region Line",
+        "line_code": "JRL",
+        "expected_year": 2027,
+        "status": "Under construction",
+        "lat": 1.350658112886788,
+        "lon": 103.69188973659976,
+        "notes": "JRL Phase 1 - station name subject to LTA confirmation"
+      },
+      {
+        "station_name": "Jurong West",
+        "line": "Jurong Region Line",
+        "line_code": "JRL",
+        "expected_year": 2027,
+        "status": "Under construction",
+        "lat": 1.3491851409286144,
+        "lon": 103.70825683283655,
+        "notes": "JRL Phase 1 - station name subject to LTA confirmation"
+      },
+      {
+        "station_name": "Bahar Junction",
+        "line": "Jurong Region Line",
+        "line_code": "JRL",
+        "expected_year": 2027,
+        "status": "Under construction",
+        "lat": 1.3461917323028454,
+        "lon": 103.7030341020502,
+        "notes": "JRL Phase 1 - interchange with EWL at Boon Lay; station name subject to LTA confirmation"
+      },
+      {
+        "station_name": "Boon Lay",
+        "line": "Jurong Region Line",
+        "line_code": "JRL",
+        "expected_year": 2027,
+        "status": "Under construction",
+        "lat": 1.338108025346798,
+        "lon": 103.70457367156334,
+        "notes": "JRL Phase 1 - interchange with EWL; station name subject to LTA confirmation"
+      },
+      {
+        "station_name": "Enterprise",
+        "line": "Jurong Region Line",
+        "line_code": "JRL",
+        "expected_year": 2027,
+        "status": "Under construction",
+        "lat": 1.3327316696239189,
+        "lon": 103.70857975778225,
+        "notes": "JRL Phase 1 - station name subject to LTA confirmation"
+      },
+      {
+        "station_name": "Tukang",
+        "line": "Jurong Region Line",
+        "line_code": "JRL",
+        "expected_year": 2027,
+        "status": "Under construction",
+        "lat": 1.3254102896356106,
+        "lon": 103.70924521471404,
+        "notes": "JRL Phase 1 - station name subject to LTA confirmation"
+      },
+      {
+        "station_name": "Nanyang Crescent",
+        "line": "Jurong Region Line",
+        "line_code": "JRL",
+        "expected_year": 2028,
+        "status": "Under construction",
+        "lat": 1.348406058361224,
+        "lon": 103.68080361982648,
+        "notes": "JRL Phase 2 - station name subject to LTA confirmation"
+      },
+      {
+        "station_name": "Nanyang",
+        "line": "Jurong Region Line",
+        "line_code": "JRL",
+        "expected_year": 2028,
+        "status": "Under construction",
+        "lat": null,
+        "lon": null,
+        "notes": "JRL Phase 2 - serves NTU; station name subject to LTA confirmation"
+      },
+      {
+        "station_name": "Gek Poh",
+        "line": "Jurong Region Line",
+        "line_code": "JRL",
+        "expected_year": 2028,
+        "status": "Under construction",
+        "lat": 1.3483461900761775,
+        "lon": 103.6981160327606,
+        "notes": "JRL Phase 2 - station name subject to LTA confirmation"
+      },
+      {
+        "station_name": "Taman Jurong",
+        "line": "Jurong Region Line",
+        "line_code": "JRL",
+        "expected_year": 2028,
+        "status": "Under construction",
+        "lat": null,
+        "lon": null,
+        "notes": "JRL Phase 2 - station name subject to LTA confirmation"
+      },
+      {
+        "station_name": "Peng Kang Hill",
+        "line": "Jurong Region Line",
+        "line_code": "JRL",
+        "expected_year": 2028,
+        "status": "Under construction",
+        "lat": 1.3432230839217252,
+        "lon": 103.67855554554436,
+        "notes": "JRL Phase 2 terminal - station name subject to LTA confirmation"
+      },
+      {
+        "station_name": "Jurong Pier",
+        "line": "Jurong Region Line",
+        "line_code": "JRL",
+        "expected_year": 2029,
+        "status": "Under construction",
+        "lat": 1.3131311689118546,
+        "lon": 103.71039877678588,
+        "notes": "JRL Phase 3 terminal - station name subject to LTA confirmation"
+      },
+      {
+        "station_name": "NTU",
+        "line": "Jurong Region Line",
+        "line_code": "JRL",
+        "expected_year": 2029,
+        "status": "Under construction",
+        "lat": null,
+        "lon": null,
+        "notes": "JRL Phase 3 - serves Nanyang Technological University; station name subject to LTA confirmation"
+      },
+      {
+        "station_name": "Boon Lay South",
+        "line": "Jurong Region Line",
+        "line_code": "JRL",
+        "expected_year": 2029,
+        "status": "Under construction",
+        "lat": null,
+        "lon": null,
+        "notes": "JRL Phase 3 - station name subject to LTA confirmation"
+      },
+      {
+        "station_name": "Gek Poh South",
+        "line": "Jurong Region Line",
+        "line_code": "JRL",
+        "expected_year": 2029,
+        "status": "Under construction",
+        "lat": null,
+        "lon": null,
+        "notes": "JRL Phase 3 - station name subject to LTA confirmation"
+      }
+    ],
+    "transport_hubs": []
+  },
+  "KALLANG": {
+    "mrt_stations": [
+      {
+        "station_name": "Founders' Memorial",
+        "line": "Thomson-East Coast Line",
+        "line_code": "TEL",
+        "expected_year": 2028,
+        "status": "Under construction",
+        "lat": 1.29097356021274,
+        "lon": 103.86893419081728,
+        "notes": "TEL infill station between Gardens by the Bay and Tanjong Rhu; opens with Founders' Memorial"
+      }
+    ],
+    "transport_hubs": [
+      {
+        "hub_name": "Kallang Bus Interchange",
+        "hub_type": "Bus Interchange",
+        "expected_year": null,
+        "status": "Under construction",
+        "notes": "Integrated with Kallang Horizon BTO project; no confirmed completion year"
+      }
+    ]
+  },
+  "MARINA SOUTH": {
+    "mrt_stations": [
+      {
+        "station_name": "Marina South",
+        "line": "Thomson-East Coast Line",
+        "line_code": "TEL",
+        "expected_year": null,
+        "status": "Proposed",
+        "lat": 1.2742039630199826,
+        "lon": 103.86311257442676,
+        "notes": "TEL infill station between Marina Bay and Gardens by the Bay; no confirmed timeline"
+      }
+    ],
+    "transport_hubs": []
+  },
+  "PASIR RIS": {
+    "mrt_stations": [
+      {
+        "station_name": "Aviation Park",
+        "line": "Cross Island Line",
+        "line_code": "CRL",
+        "expected_year": 2030,
+        "status": "Under construction",
+        "lat": 1.3702113670676506,
+        "lon": 104.00351389332846,
+        "notes": "CRL Phase 1 eastern terminal"
+      },
+      {
+        "station_name": "Loyang",
+        "line": "Cross Island Line",
+        "line_code": "CRL",
+        "expected_year": 2030,
+        "status": "Under construction",
+        "lat": 1.3714039693793765,
+        "lon": 103.97222524704988,
+        "notes": "CRL Phase 1"
+      },
+      {
+        "station_name": "Pasir Ris",
+        "line": "Cross Island Line",
+        "line_code": "CRL",
+        "expected_year": 2030,
+        "status": "Under construction",
+        "lat": 1.370903461094558,
+        "lon": 103.9493739955676,
+        "notes": "CRL Phase 1 - interchange with EWL and CPE"
+      }
+    ],
+    "transport_hubs": []
+  },
+  "PUNGGOL": {
+    "mrt_stations": [
+      {
+        "station_name": "Punggol North",
+        "line": "Cross Island Line",
+        "line_code": "CRL",
+        "expected_year": 2032,
+        "status": "Under construction",
+        "lat": null,
+        "lon": null,
+        "notes": "CRL Punggol Extension"
+      },
+      {
+        "station_name": "Punggol",
+        "line": "Cross Island Line",
+        "line_code": "CRL",
+        "expected_year": 2032,
+        "status": "Under construction",
+        "lat": 1.4051667770089038,
+        "lon": 103.90239279945696,
+        "notes": "CRL Punggol Extension - interchange with NEL and Punggol LRT"
+      }
+    ],
+    "transport_hubs": []
+  },
+  "SENGKANG": {
+    "mrt_stations": [
+      {
+        "station_name": "Rivervale",
+        "line": "Cross Island Line",
+        "line_code": "CRL",
+        "expected_year": 2032,
+        "status": "Under construction",
+        "lat": null,
+        "lon": null,
+        "notes": "CRL Punggol Extension"
+      }
+    ],
+    "transport_hubs": []
+  },
+  "SERANGOON": {
+    "mrt_stations": [
+      {
+        "station_name": "Serangoon North",
+        "line": "Cross Island Line",
+        "line_code": "CRL",
+        "expected_year": 2030,
+        "status": "Under construction",
+        "lat": 1.3705661627364352,
+        "lon": 103.87392796807832,
+        "notes": "CRL Phase 1"
+      }
+    ],
+    "transport_hubs": []
+  },
+  "TENGAH": {
+    "mrt_stations": [
+      {
+        "station_name": "Tengah",
+        "line": "Jurong Region Line",
+        "line_code": "JRL",
+        "expected_year": 2027,
+        "status": "Under construction",
+        "lat": 1.3663534647032467,
+        "lon": 103.73001067862933,
+        "notes": "JRL Phase 1 - station name subject to LTA confirmation"
+      },
+      {
+        "station_name": "Tengah Park",
+        "line": "Jurong Region Line",
+        "line_code": "JRL",
+        "expected_year": 2027,
+        "status": "Under construction",
+        "lat": 1.352326157460195,
+        "lon": 103.73678393001224,
+        "notes": "JRL Phase 1 - station name subject to LTA confirmation"
+      },
+      {
+        "station_name": "Tengah Central",
+        "line": "Jurong Region Line",
+        "line_code": "JRL",
+        "expected_year": 2028,
+        "status": "Under construction",
+        "lat": null,
+        "lon": null,
+        "notes": "JRL Phase 2 - station name subject to LTA confirmation"
+      }
+    ],
+    "transport_hubs": []
+  },
+  "TOA PAYOH": {
+    "mrt_stations": [
+      {
+        "station_name": "Mount Pleasant",
+        "line": "Thomson-East Coast Line",
+        "line_code": "TEL",
+        "expected_year": null,
+        "status": "Proposed",
+        "lat": 1.3285471133429991,
+        "lon": 103.83506011898334,
+        "notes": "TEL infill station between Caldecott and Stevens; no confirmed timeline"
+      }
+    ],
+    "transport_hubs": []
+  },
+  "WOODLANDS": {
+    "mrt_stations": [
+      {
+        "station_name": "Woodlands North (RTS)",
+        "line": "RTS Link",
+        "line_code": "RTS",
+        "expected_year": 2026,
+        "status": "Under construction",
+        "lat": null,
+        "lon": null,
+        "notes": "Cross-border link to Johor Bahru Bukit Chagar; connects to TEL"
+      },
+      {
+        "station_name": "Sungei Kadut",
+        "line": "North-South Line",
+        "line_code": "NSL",
+        "expected_year": 2035,
+        "status": "Confirmed",
+        "lat": null,
+        "lon": null,
+        "notes": "NSL infill station between Yew Tee and Kranji"
+      }
+    ],
+    "transport_hubs": [
+      {
+        "hub_name": "Woodlands North Integrated Transport Hub",
+        "hub_type": "Integrated Transport Hub",
+        "expected_year": null,
+        "status": "Proposed",
+        "notes": "As per URA Draft Master Plan 2025"
+      }
+    ]
+  },
+  "TAMPINES": {
+    "mrt_stations": [],
+    "transport_hubs": [
+      {
+        "hub_name": "Tampines North Integrated Transport Hub",
+        "hub_type": "Integrated Transport Hub",
+        "expected_year": null,
+        "status": "Under construction",
+        "notes": "No confirmed completion year"
+      },
+      {
+        "hub_name": "Tampines Integrated Transport Hub",
+        "hub_type": "Integrated Transport Hub",
+        "expected_year": null,
+        "status": "Proposed",
+        "notes": "As per URA Draft Master Plan 2025"
+      }
+    ]
+  },
+  "YISHUN": {
+    "mrt_stations": [],
+    "transport_hubs": [
+      {
+        "hub_name": "Chencharu Bus Interchange",
+        "hub_type": "Bus Interchange",
+        "expected_year": null,
+        "status": "Proposed",
+        "notes": "Serves new Chencharu residential precinct"
+      }
+    ]
+  }
+}
