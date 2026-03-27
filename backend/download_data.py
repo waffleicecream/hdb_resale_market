@@ -46,6 +46,11 @@ DATASETS = [
         "filename": "Generalinformationofschools.csv",
         "description": "MOE general information of schools",
     },
+    {
+        "id": "d_2c06c9fe8ae724b5d33efa1f203e2c38",
+        "filename": "MasterPlan2025RailStationLayer.geojson",
+        "description": "Master Plan 2025 rail station locations (GeoJSON)",
+    },
 ]
 
 POLL_URL = "https://api-open.data.gov.sg/v1/public/api/datasets/{dataset_id}/poll-download"
@@ -63,6 +68,11 @@ def download_dataset(dataset_id: str, filename: str, description: str) -> bool:
 
     for attempt in range(5):
         response = requests.get(url, timeout=30)
+        if response.status_code == 429:
+            wait = 10 * (attempt + 1)
+            print(f"  Rate limited (429), waiting {wait}s (attempt {attempt + 1})...")
+            time.sleep(wait)
+            continue
         response.raise_for_status()
         json_data = response.json()
 

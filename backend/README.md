@@ -27,6 +27,8 @@ Run the notebooks in this order:
 3. **`train_pipeline.ipynb`** - Geocodes every unique HDB address and finds the nearest MRT or LRT station distance using the OneMap API. Requires `../.env` to be filled in with OneMap credentials before running.
 4. **`amenities_pipeline.ipynb`** - Computes amenity distances and names: nearest hawker centre (open at time of transaction), CBD (Raffles Place MRT proxy), nearest MOE primary school + schools within 1 km, nearest park + parks within 1 km, nearest SportSG sport facility, nearest shopping mall, nearest polyclinic/hospital. Geocodes primary schools and healthcare facilities via OneMap API on first run (cached thereafter). All columns accumulated in memory; dataset written once at the end. Saves to `hdb_with_amenities_macro.csv`.
 
+5. **`future_mrt_pipeline.ipynb`** — Matches planned MRT stations to URA Master Plan 2025 GeoJSON polygons to extract centroids (lat/lon). Combines with future transport hub data and outputs a town-keyed JSON for the frontend. Independent of the main pipeline — re-runnable standalone.
+
 ## Raw Data (`../data/`)
 
 | File | Description |
@@ -40,6 +42,9 @@ Run the notebooks in this order:
 | `Generalinformationofschools.csv` | MOE school directory. Filtered to `mainlevel_code == 'PRIMARY'` for primary school distance computation in notebook 4. |
 | `Parks.geojson` | NParks managed green space point locations. Non-park features (playgrounds, car parks, terminals, etc.) are excluded before distance computation in notebook 4. |
 | `SportSGSportFacilitiesGEOJSON.geojson` | SportSG managed sport facility point locations (45 facilities). Used by notebook 4. |
+| `future_mrt_stations.csv` | Planned MRT stations with columns: `station_name`, `line`, `line_code`, `town`, `expected_year`, `status`, `notes`. |
+| `future_transport_hubs.csv` | Planned transport hubs with columns: `hub_name`, `hub_type`, `town`, `expected_year`, `status`, `notes`. |
+| `MasterPlan2025RailStationLayer.geojson` | URA Master Plan 2025 rail station polygons. `NAME` property in ALL CAPS; interchange stations suffixed with ` INTERCHANGE`. Used by `future_mrt_pipeline.ipynb`. |
 | `shoppingmalls.csv` | Shopping mall locations (238 rows, 221 unique malls after deduplication by name). Used by notebook 4. |
 | `healthcare_address.csv` | 38 healthcare facilities (27 polyclinics + 11 hospitals) with institution name and postal code. Used by notebook 4. |
 
@@ -51,6 +56,7 @@ Run the notebooks in this order:
 | `merged_hdb_resale_with_macro.csv` | Output of notebook 2. Final dataset for modeling, filtered from 2020-Q1 onwards. |
 | `hdb_with_train_distances.csv` | Output of notebook 3. Full dataset enriched with lat/lon coordinates and nearest MRT/LRT station details (`nearest_train_line`, `nearest_train_dist_m`, `nearest_train_name`). |
 | `hdb_with_amenities_macro.csv` | Output of notebook 4. Full dataset enriched with amenity distances, names, within-1km school/park lists, and `resale_price_real`. |
+| `future_mrt_stations_with_coords.csv` | Output of `future_mrt_pipeline.ipynb` Step 1. Future MRT stations with `lat`/`lon` columns added from GeoJSON centroid matching. Rows with no GeoJSON match have `null` coords. |
 | `quarterly_summary.csv` | Quarterly price statistics (count, mean, median, min, max). |
 | `quarterly_macro_summary.csv` | Quarterly macro variables with transaction counts. |
 | `MACRO_VARIABLES_DICTIONARY.md` | Detailed documentation of all macro variables added. |
