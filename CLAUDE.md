@@ -75,3 +75,10 @@ The `outputs/` directory is consumed by the frontend:
 - `town_cagr_by_flat.csv` — CAGR by town × flat type
 - `town_choropleth.geojson` — town boundaries with CAGR values for map rendering
 - `national_cagr_benchmarks.json` — national medians and CAGR benchmarks (including per flat type)
+- `town_developments.json` — planned MRT stations and transport hubs grouped by town (from `future_mrt_pipeline.ipynb`)
+
+---
+
+## Development Practices
+- **After writing notebook code**: Run all cells and fix any issues before considering the task done
+- **Before planning implementation**: Ask clarifying questions to resolve ambiguities (output paths, file formats, edge case handling) upfront rather than making assumptions

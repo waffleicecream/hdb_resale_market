@@ -1,6 +1,6 @@
 # PROGRESS.md — HDB Resale Market Project
 
-_Last updated: 2026-03-22 (session 2)_
+_Last updated: 2026-03-27 (session 3)_
 
 ---
 
@@ -23,7 +23,12 @@ All 5 notebooks are implemented and have been run at least once:
    - `outputs/town_choropleth.geojson`
    - `outputs/national_cagr_benchmarks.json`
 
-6. **`price_model/ols_modelling.ipynb`** — OLS baseline model for HDB resale price prediction. Full pipeline: data cleaning, feature engineering, stratified 80/20 split, OLS fit with VIF check, diagnostics, and evaluation. Outputs `ols_model_summary.txt` and diagnostic PNG plots.
+6. **`future_mrt_pipeline.ipynb`** — Matches planned MRT stations against URA Master Plan 2025 GeoJSON (`MasterPlan2025RailStationLayer.geojson`) to extract polygon centroids. Combines with transport hub data and builds a town-keyed lookup for the frontend. Independent of main pipeline — re-runnable standalone.
+   - **Step 1:** 43/54 stations matched; 11 unmatched (e.g. RTS Link, Tengah Central, JRL extensions not yet in Master Plan 2025) — included with `null` lat/lon
+   - **Outputs:** `data/future_mrt_stations_with_coords.csv`, `outputs/town_developments.json` (22 towns: 20 with MRT data, 11 with hub data)
+   - `shapely` added to `requirements.txt`; `MasterPlan2025RailStationLayer.geojson` and `future_mrt_stations_with_coords.csv` added to `.gitignore`
+
+7. **`price_model/ols_modelling.ipynb`** — OLS baseline model for HDB resale price prediction. Full pipeline: data cleaning, feature engineering, stratified 80/20 split, OLS fit with VIF check, diagnostics, and evaluation. Outputs `ols_model_summary.txt` and diagnostic PNG plots.
    - **Features (39 total):** `remaining_lease_years`, `nearest_train_dist_m`, 6 amenity distances (standardised); flat type × 4, town × 25, floor category × 2 (one-hot)
    - **Excluded:** `floor_area_sqm` (not a user input at inference time), `dist_cbd_m` (VIF 33.1, redundant with town fixed effects)
    - **Target:** `log_resale_price_real` (log-transformed RPI-adjusted price); predictions exponentiated back to SGD at evaluation (median prediction, no Duan correction)
@@ -50,6 +55,9 @@ All 5 notebooks are implemented and have been run at least once:
 ### Price Model (backend/price_model/)
 - **Next models to implement:** Random Forest, XGBoost (or other non-linear models) using the same feature set and train/test split as the OLS baseline
 - **Model comparison notebook:** Once all models are implemented, build a final comparison notebook computing composite 50/50 RMSE + Linlin scores across models
+
+### Future MRT Pipeline
+- **11 unmatched stations** in `future_mrt_stations_with_coords.csv` (null lat/lon). Investigate whether names need to be adjusted to match the GeoJSON, or whether these stations are intentionally absent from Master Plan 2025.
 
 ### Medium Priority
 - ~~**`download_data.py`**: Script stub exists but not yet implemented.~~ **Done** — `download_data.py` was already fully implemented. Large raw data files and intermediate CSVs have been untracked from git (`git rm --cached`); `requirements.txt` re-encoded to UTF-8; `.env.example` added; `backend/README.md` setup section updated.

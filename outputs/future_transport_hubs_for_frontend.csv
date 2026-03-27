@@ -1,0 +1,14 @@
+town,hub_name,hub_type,expected_year,status,notes
+BEDOK,Bedok South Integrated Transport Hub,Integrated Transport Hub,,Proposed,As per URA Master Plan 2019
+BISHAN,Bishan Integrated Transport Hub,Integrated Transport Hub,,Proposed,As per URA Draft Master Plan 2025
+BUKIT MERAH,Tiong Bahru Integrated Transport Hub,Integrated Transport Hub,,Proposed,As per URA Master Plan 2019
+BUKIT TIMAH,Beauty World Integrated Transport Hub,Integrated Transport Hub,2028.0,Under construction,Part of mixed-use Bukit V Mall development at Beauty World
+BUKIT TIMAH,Turf City Integrated Transport Hub,Integrated Transport Hub,,Proposed,As per URA Draft Master Plan 2025; verify town boundary against shapefile
+CHOA CHU KANG,Choa Chu Kang Integrated Transport Hub,Integrated Transport Hub,,Proposed,As per URA Draft Master Plan 2025
+HOUGANG,Hougang Central Integrated Transport Hub,Integrated Transport Hub,,Proposed,As per URA Master Plan 2019
+JURONG EAST,Jurong East Integrated Transport Hub,Integrated Transport Hub,2027.0,Under construction,Also known as Jurong Gateway Hub; part of Jurong Lake District transformation
+KALLANG,Kallang Bus Interchange,Bus Interchange,,Under construction,Integrated with Kallang Horizon BTO project; no confirmed completion year
+WOODLANDS,Woodlands North Integrated Transport Hub,Integrated Transport Hub,,Proposed,As per URA Draft Master Plan 2025
+TAMPINES,Tampines North Integrated Transport Hub,Integrated Transport Hub,,Under construction,No confirmed completion year
+TAMPINES,Tampines Integrated Transport Hub,Integrated Transport Hub,,Proposed,As per URA Draft Master Plan 2025
+YISHUN,Chencharu Bus Interchange,Bus Interchange,,Proposed,Serves new Chencharu residential precinct

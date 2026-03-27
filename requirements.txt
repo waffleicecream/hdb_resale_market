@@ -42,3 +42,5 @@ tqdm
 
 python-dotenv
 
+shapely
+
