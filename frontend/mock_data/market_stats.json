@@ -1,0 +1,35 @@
+{
+  "3m": {
+    "total_transactions": 7842,
+    "total_transactions_prev": 7213,
+    "total_transactions_pct": 8.7,
+    "median_price": 548000,
+    "median_price_prev": 521000,
+    "median_price_pct": 5.2,
+    "mom_growth_pct": 1.8,
+    "hottest": { "town": "Queenstown", "growth_pct": 12.4, "transactions": 423 },
+    "coolest": { "town": "Woodlands", "growth_pct": -3.1, "transactions": 312 }
+  },
+  "6m": {
+    "total_transactions": 15234,
+    "total_transactions_prev": 14123,
+    "total_transactions_pct": 7.9,
+    "median_price": 542000,
+    "median_price_prev": 512000,
+    "median_price_pct": 5.9,
+    "mom_growth_pct": 1.2,
+    "hottest": { "town": "Marine Parade", "growth_pct": 9.8, "transactions": 187 },
+    "coolest": { "town": "Jurong West", "growth_pct": -2.1, "transactions": 1089 }
+  },
+  "1y": {
+    "total_transactions": 29834,
+    "total_transactions_prev": 27123,
+    "total_transactions_pct": 10.0,
+    "median_price": 535000,
+    "median_price_prev": 498000,
+    "median_price_pct": 7.4,
+    "mom_growth_pct": 0.8,
+    "hottest": { "town": "Queenstown", "growth_pct": 24.6, "transactions": 1621 },
+    "coolest": { "town": "Woodlands", "growth_pct": -1.4, "transactions": 1196 }
+  }
+}
