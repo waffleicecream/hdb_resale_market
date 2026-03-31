@@ -1,0 +1,60 @@
+{
+  "flats": {
+    "Flat A": {
+      "postal_code": "310058",
+      "address": "Blk 58 Lor 4 Toa Payoh",
+      "town": "Toa Payoh",
+      "flat_type": "4-Room"
+    },
+    "Flat B": {
+      "postal_code": "560234",
+      "address": "Blk 234 Ang Mo Kio Ave 3",
+      "town": "Ang Mo Kio",
+      "flat_type": "5-Room"
+    },
+    "Flat C": {
+      "postal_code": "820412",
+      "address": "Blk 412 Punggol Place",
+      "town": "Punggol",
+      "flat_type": "4-Room"
+    }
+  },
+  "nearest": {
+    "Flat A": {
+      "mrt_station":   { "name": "Toa Payoh MRT (NS19)", "distance_m": 320, "walk_min": 4 },
+      "shopping_mall": { "name": "HDB Hub", "distance_m": 480, "walk_min": 6 },
+      "hawker_centre": { "name": "Lor 4 Toa Payoh Market & Food Centre", "distance_m": 150, "walk_min": 2 },
+      "polyclinic":    { "name": "Toa Payoh Polyclinic", "distance_m": 680, "walk_min": 8 },
+      "sports_hall":   { "name": "Toa Payoh Sports Hall", "distance_m": 890, "walk_min": 11 }
+    },
+    "Flat B": {
+      "mrt_station":   { "name": "Ang Mo Kio MRT (NS16)", "distance_m": 640, "walk_min": 8 },
+      "shopping_mall": { "name": "AMK Hub", "distance_m": 650, "walk_min": 8 },
+      "hawker_centre": { "name": "Ang Mo Kio Ave 3 Market", "distance_m": 210, "walk_min": 3 },
+      "polyclinic":    { "name": "Ang Mo Kio Polyclinic", "distance_m": 720, "walk_min": 9 },
+      "sports_hall":   { "name": "Ang Mo Kio Sports Hall", "distance_m": 1200, "walk_min": 15 }
+    },
+    "Flat C": {
+      "mrt_station":   { "name": "Punggol MRT (NE17)", "distance_m": 980, "walk_min": 12 },
+      "shopping_mall": { "name": "Waterway Point", "distance_m": 1050, "walk_min": 13 },
+      "hawker_centre": { "name": "Punggol 21 Hawker Centre", "distance_m": 430, "walk_min": 5 },
+      "polyclinic":    { "name": "Punggol Polyclinic", "distance_m": 1340, "walk_min": 17 },
+      "sports_hall":   { "name": "Sengkang Sports Hall", "distance_m": 1580, "walk_min": 20 }
+    }
+  },
+  "within_1km": {
+    "Flat A": {
+      "primary_schools": ["Kheng Cheng School", "Pei Chun Public School", "St. Joseph's Institution Junior"],
+      "parks": ["Toa Payoh Town Park", "Toa Payoh Stadium Park"]
+    },
+    "Flat B": {
+      "primary_schools": ["Ai Tong School", "CHIJ St. Nicholas Girls' School (Primary)", "Ang Mo Kio Primary School"],
+      "parks": ["Ang Mo Kio Town Garden West", "Bishan-Ang Mo Kio Park"]
+    },
+    "Flat C": {
+      "primary_schools": ["Mee Toh School", "Punggol Green Primary School", "Edgefield Primary School", "Greendale Primary School"],
+      "parks": ["Punggol Waterway Park", "Sengkang Riverside Park"]
+    }
+  },
+  "llm_summary": "Flat A in Toa Payoh offers the most mature amenity profile of the three, with a hawker centre just 150m away and Toa Payoh MRT within a 4-minute walk, providing excellent connectivity via the North-South Line. Flat B in Ang Mo Kio has the advantage of a lower-distance hawker centre at 210m and is located close to AMK Hub for retail needs, though its MRT access at 640m is the furthest of the three. Flat C in Punggol is situated in a newer estate and has the highest concentration of primary schools within 1km — four in total, including Mee Toh and Punggol Green Primary — making it particularly well-positioned for families with school-going children, though its distance to the MRT station and shopping mall is the greatest among the three."
+}
