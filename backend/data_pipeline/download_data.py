@@ -2,9 +2,9 @@
 download_data.py — Fetch raw data files from data.gov.sg
 
 Run this once before executing the pipeline notebooks:
-    python backend/download_data.py
+    python backend/data_pipeline/download_data.py
 
-Files are saved to ../data/ and skipped if they already exist.
+Files are saved to data/ and skipped if they already exist.
 """
 
 import sys
@@ -13,7 +13,7 @@ from pathlib import Path
 
 import requests
 
-DATA_DIR = Path(__file__).parent.parent / "data"
+DATA_DIR = Path(__file__).parent.parent.parent / "data"
 
 DATASETS = [
     {
