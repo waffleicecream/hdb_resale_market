@@ -5,12 +5,12 @@
 Raw data files from data.gov.sg are not stored in the repo. Download them first:
 
 ```bash
-python backend/download_data.py
+python backend/data_pipeline/download_data.py
 ```
 
-This fetches 6 files into `data/` (skips any that already exist). The other data files (`shoppingmalls.csv`, `3MonthCompoundedSORA2017to2026.csv`, `percentagechangeinCPImonthly.xlsx`, `MedianResalePricesforRegisteredApplicationsbyTownandFlatType.csv`) are kept in the repo as they are not available via data.gov.sg.
+This fetches 6 files into `data/` (skips any that already exist). The other data files (`shoppingmalls.csv`, `percentagechangeinCPImonthly.xlsx`, `MedianResalePricesforRegisteredApplicationsbyTownandFlatType.csv`) are kept in the repo as they are not available via data.gov.sg.
 
-For notebooks 3 and 4, create `../.env` from the provided template and fill in your OneMap credentials ([register here](https://www.onemap.gov.sg/apidocs/)):
+For notebooks 2 and 3, create `../.env` from the provided template and fill in your OneMap credentials ([register here](https://www.onemap.gov.sg/apidocs/)):
 ```bash
 cp .env.example .env
 # then edit .env with your credentials
@@ -20,14 +20,15 @@ cp .env.example .env
 
 ## Notebook Execution Order
 
-Run the notebooks in this order:
+All pipeline notebooks live in `data_pipeline/`. Run them in this order:
 
-1. **`data_exploration.ipynb`** - Loads raw data, merges RPI, creates real prices, and saves the base merged dataset.
-2. **`add_macro_variables.ipynb`** - Adds macroeconomic variables (SORA, inflation, real interest rate) to the merged dataset.
-3. **`train_pipeline.ipynb`** - Geocodes every unique HDB address and finds the nearest MRT or LRT station distance using the OneMap API. Requires `../.env` to be filled in with OneMap credentials before running.
-4. **`amenities_pipeline.ipynb`** - Computes amenity distances and names: nearest hawker centre (open at time of transaction), CBD (Raffles Place MRT proxy), nearest MOE primary school + schools within 1 km, nearest park + parks within 1 km, nearest SportSG sport facility, nearest shopping mall, nearest polyclinic/hospital. Geocodes primary schools and healthcare facilities via OneMap API on first run (cached thereafter). All columns accumulated in memory; dataset written once at the end. Saves to `hdb_with_amenities_macro.csv`.
+1. **`data_pipeline/1_misc_features.ipynb`** - Loads raw data, merges RPI, creates real prices (base: Q4 2025, RPI = 203.6), filters to 2021-Q1 onwards, and saves the base merged dataset.
+2. **`data_pipeline/2_train_pipeline.ipynb`** - Geocodes every unique HDB address and finds the nearest MRT or LRT station distance using the OneMap API. Requires `../.env` to be filled in with OneMap credentials before running.
+3. **`data_pipeline/3_amenities_pipeline.ipynb`** - Computes amenity distances and names: nearest hawker centre (open at time of transaction), CBD (Raffles Place MRT proxy), nearest MOE primary school + schools within 1 km, nearest park + parks within 1 km, nearest SportSG sport facility, nearest shopping mall, nearest polyclinic/hospital. Geocodes primary schools and healthcare facilities via OneMap API on first run (cached thereafter). All columns accumulated in memory; dataset split and written at the end. Saves to `[FINAL]hdb_with_amenities_macro_2026.csv` (2026 transactions only) and `[FINAL]hdb_with_amenities_macro_pre2026.csv` (2021–2025 transactions).
 
-5. **`future_mrt_pipeline.ipynb`** — Matches planned MRT stations to URA Master Plan 2025 GeoJSON polygons to extract centroids (lat/lon). Combines with future transport hub data and outputs a town-keyed JSON for the frontend. Independent of the main pipeline — re-runnable standalone.
+4. **`future_mrt_pipeline.ipynb`** — Matches planned MRT stations to URA Master Plan 2025 GeoJSON polygons to extract centroids (lat/lon). Combines with future transport hub data and outputs a town-keyed JSON for the frontend. Independent of the main pipeline — re-runnable standalone.
+
+**EDA (non-pipeline):** `data_pipeline/data_exploration.ipynb` — visualizations and summary statistics. Requires step 1 output.
 
 ## Raw Data (`../data/`)
 
@@ -35,7 +36,6 @@ Run the notebooks in this order:
 |------|-------------|
 | `ResaleflatpricesbasedonregistrationdatefromJan2017onwards.csv` | Main dataset: 224,541 individual HDB resale transactions with property details (town, flat type, floor area, storey, lease, price). |
 | `HDBResalePriceIndex1Q2009100Quarterly.csv` | Quarterly HDB Resale Price Index (RPI). Base period: 2009-Q1 = 100. |
-| `3MonthCompoundedSORA2017to2026.csv` | Daily 3-month compounded SORA from MAS. Benchmark interest rate for housing loans. |
 | `MedianResalePricesforRegisteredApplicationsbyTownandFlatType.csv` | Quarterly median resale prices aggregated by town and flat type. |
 | `percentagechangeinCPImonthly.xlsx` | Monthly CPI percentage change data. |
 | `HawkerCentresGEOJSON.geojson` | Hawker centre point locations with `STATUS` and `EST_ORIGINAL_COMPLETION_DATE` fields. Used by notebook 4. |
@@ -52,25 +52,23 @@ Run the notebooks in this order:
 
 | File | Description |
 |------|-------------|
-| `merged_hdb_resale_with_rpi.csv` | Output of notebook 1. Transaction data merged with RPI and real prices. |
-| `merged_hdb_resale_with_macro.csv` | Output of notebook 2. Final dataset for modeling, filtered from 2020-Q1 onwards. |
-| `hdb_with_train_distances.csv` | Output of notebook 3. Full dataset enriched with lat/lon coordinates and nearest MRT/LRT station details (`nearest_train_line`, `nearest_train_dist_m`, `nearest_train_name`). |
-| `hdb_with_amenities_macro.csv` | Output of notebook 4. Full dataset enriched with amenity distances, names, within-1km school/park lists, and `resale_price_real`. |
+| `merged_hdb_resale_with_rpi.csv` | Output of notebook 1. Transaction data merged with RPI, real prices (Q4 2025 base), filtered to 2021-Q1 onwards. |
+| `hdb_with_train_distances.csv` | Output of notebook 2. Full dataset enriched with lat/lon coordinates and nearest MRT/LRT station details (`nearest_train_line`, `nearest_train_dist_m`, `nearest_train_name`). |
+| `[FINAL]hdb_with_amenities_macro_2026.csv` | Output of notebook 3 (2026 transactions only). Full dataset enriched with amenity distances, names, within-1km school/park lists, and `resale_price_real`. |
+| `[FINAL]hdb_with_amenities_macro_pre2026.csv` | Output of notebook 3 (2021–2025 transactions). Same schema as above. |
 | `future_mrt_stations_with_coords.csv` | Output of `future_mrt_pipeline.ipynb` Step 1. Future MRT stations with `lat`/`lon` columns added from GeoJSON centroid matching. Rows with no GeoJSON match have `null` coords. |
 | `quarterly_summary.csv` | Quarterly price statistics (count, mean, median, min, max). |
-| `quarterly_macro_summary.csv` | Quarterly macro variables with transaction counts. |
-| `MACRO_VARIABLES_DICTIONARY.md` | Detailed documentation of all macro variables added. |
 
 ## Cache and Config Files
 
 | File | Description |
 |------|-------------|
 | `.env` | OneMap API credentials. Fill in `ONEMAP_EMAIL` and `ONEMAP_PASSWORD` before running notebooks 3 and 4. |
-| `data/geocode_cache.json` | Auto-created by notebook 3. Caches geocoded lat/lon per HDB address — safe to delete to re-geocode from scratch. |
-| `data/train_cache.json` | Auto-created by notebook 3. Caches nearest MRT/LRT results per address — safe to delete to re-fetch from scratch. |
-| `data/failed_geocodes.csv` | Auto-created by notebook 3. Lists addresses that could not be geocoded. |
-| `data/school_geocode_cache.json` | Auto-created by notebook 4 (Phase 6). Caches geocoded lat/lon per primary school postal code — safe to delete to re-geocode from scratch. |
-| `data/healthcare_geocode_cache.json` | Auto-created by notebook 4 (Phase 10). Caches geocoded lat/lon per healthcare facility postal code. |
+| `data/geocode_cache.json` | Auto-created by `data_pipeline/2_train_pipeline.ipynb`. Caches geocoded lat/lon per HDB address — safe to delete to re-geocode from scratch. |
+| `data/train_cache.json` | Auto-created by `data_pipeline/2_train_pipeline.ipynb`. Caches nearest MRT/LRT results per address — safe to delete to re-fetch from scratch. |
+| `data/failed_geocodes.csv` | Auto-created by `data_pipeline/2_train_pipeline.ipynb`. Lists addresses that could not be geocoded. |
+| `data/school_geocode_cache.json` | Auto-created by `data_pipeline/3_amenities_pipeline.ipynb` (Phase 6). Caches geocoded lat/lon per primary school postal code — safe to delete to re-geocode from scratch. |
+| `data/healthcare_geocode_cache.json` | Auto-created by `data_pipeline/3_amenities_pipeline.ipynb` (Phase 10). Caches geocoded lat/lon per healthcare facility postal code. |
 
 ## Final Dataset Columns (`hdb_with_train_distances.csv`)
 
@@ -89,17 +87,15 @@ Run the notebooks in this order:
 | `remaining_lease` | Remaining lease duration |
 | `resale_price` | Nominal resale price (SGD) |
 
-### Derived and macro variables
+### Derived variables
 | Column | Description |
 |--------|-------------|
 | `quarter` | Quarter (e.g. 2018-Q2) |
 | `rpi` | HDB Resale Price Index for that quarter |
-| `resale_price_real` | Real resale price adjusted by RPI (base: 2017-Q1) |
-| `sora_3m` | End-of-quarter 3-month compounded SORA (%) |
-| `inflation_yoy` | Year-over-year housing price inflation from RPI (%) |
-| `real_interest_rate` | Real interest rate: `sora_3m - inflation_yoy` (%) |
-| `sora_3m_lag1` | Previous quarter's SORA (%) |
-| `real_interest_rate_lag1` | Previous quarter's real interest rate (%) |
+| `resale_price_real` | Real resale price adjusted by RPI (base: Q4 2025, RPI = 203.6) |
+| `remaining_lease_years` | Remaining lease as a decimal year (e.g. `"61 years 04 months"` → `61.3333`) |
+| `floor_category` | Storey bucket derived from lower bound of `storey_range`: Low (1–5), Mid (6–12), High (13+) |
+| `year` | Integer year from `month` — used for stratification, not a model feature |
 
 ### Geocoding and MRT/LRT features
 | Column | Description |
@@ -110,7 +106,7 @@ Run the notebooks in this order:
 | `nearest_train_dist_m` | Straight-line distance to the nearest MRT/LRT station that was open at transaction time (metres). NaN if none found within 5 km. |
 | `nearest_train_name` | Full name of the nearest open MRT/LRT station (e.g. "ANG MO KIO MRT STATION"). NaN if none found. |
 
-### Amenity features (`hdb_with_amenities_macro.csv`)
+### Amenity features (`[FINAL]hdb_with_amenities_macro_2026.csv` / `[FINAL]hdb_with_amenities_macro_pre2026.csv`)
 | Column | Description |
 |--------|-------------|
 | `dist_nearest_hawker_m` | Straight-line distance (metres) to the nearest hawker centre open at time of transaction. |
@@ -126,4 +122,6 @@ Run the notebooks in this order:
 | `nearest_mall_name` | Name of the nearest shopping mall. |
 | `dist_nearest_healthcare_m` | Straight-line distance (metres) to the nearest polyclinic or hospital (38 facilities). |
 | `nearest_healthcare_name` | Name of the nearest polyclinic or hospital. |
+| `num_primary_1km` | Count of MOE primary schools within 1 km. |
+| `num_parks_1km` | Count of NParks managed parks within 1 km. |
 | `resale_price_real` | Real resale price adjusted to Q4 2025 RPI = 203.6. |
