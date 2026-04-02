@@ -1,6 +1,6 @@
 # PROGRESS.md — HDB Resale Market Project
 
-_Last updated: 2026-04-01 (session 5)_
+_Last updated: 2026-04-03 (session 8)_
 
 ---
 
@@ -29,15 +29,23 @@ All pipeline notebooks moved to `backend/data_pipeline/`. All relative paths upd
    - **CSV outputs also generated** for frontend: `outputs/future_mrt_stations.csv` (54 rows), `outputs/future_transport_hubs.csv` (13 rows)
    - `shapely` added to `requirements.txt`; `MasterPlan2025RailStationLayer.geojson` and `future_mrt_stations_with_coords.csv` added to `.gitignore`
 
-7. **`price_model/ols_modelling.ipynb`** — OLS baseline model for HDB resale price prediction. Full pipeline: data cleaning, feature engineering, stratified 80/20 split, OLS fit with VIF check, diagnostics, and evaluation. Outputs `ols_model_summary.txt`; diagnostic PNG plots removed (view inline only).
-   - **Features (40 total):** 9 continuous (`remaining_lease_years`, `nearest_train_dist_m`, `dist_nearest_hawker_m`, `dist_nearest_primary_m`, `num_primary_1km`, `dist_nearest_park_m`, `dist_nearest_sportsg_m`, `dist_nearest_mall_m`, `dist_nearest_healthcare_m`); flat type × 4, town × 25, floor category × 2 (one-hot)
+7. **`price_model/ols_modelling.ipynb`** — OLS baseline model for HDB resale price prediction. Full pipeline: data cleaning, stratified 80/20 train/validation split (shared across all models for fair comparison), OLS fit with VIF check, diagnostics, and evaluation.
+   - **Features (43 total):** 10 continuous (`remaining_lease_years`, `nearest_train_dist_m`, `dist_nearest_hawker_m`, `dist_nearest_primary_m`, `num_primary_1km`, `dist_nearest_park_m`, `num_parks_1km`, `dist_nearest_sportsg_m`, `dist_nearest_mall_m`, `dist_nearest_healthcare_m`); flat type × 6 (now includes 1 ROOM and MULTI-GENERATION), town × 25, floor category × 2 (one-hot)
    - **Excluded:** `floor_area_sqm` (not a user input at inference time), `dist_cbd_m` (VIF 33.1, redundant with town fixed effects)
    - **Target:** `log_resale_price_real` (log-transformed RPI-adjusted price); predictions exponentiated back to SGD at evaluation
-   - **Results:** R² = 0.887 (log space), RMSE = $76,377, Linlin Loss = $83,218 (w=2), 80% PI coverage = 82.7%, VIF check clean (no feature > 10)
+   - **Pre-computed from CSV:** `remaining_lease_years`, `floor_category`, `year`, `num_primary_1km`, `num_parks_1km` — no re-derivation in notebook
+   - **Split:** train/validation (not train/test) — held-out validation set shared across OLS, CatBoost, RF for model comparison
+   - **Results (validation set):** R² = 0.885 (log space), RMSE = $74,745, Linlin Loss = $82,036 (w=2), 80% PI coverage = 82.7%, VIF check clean (no feature > 10)
 
 8. **`price_model/catboost_modelling.ipynb`** — CatBoost gradient-boosted tree model. Same 9 continuous + 3 categorical features as OLS; no scaling needed; categorical features handled natively.
    - **Results:** R² = 0.9647, RMSE = $40,466, MAE = $27,771, MAPE = 4.15% — substantially outperforms OLS
    - **Outputs:** `price_model/catboost_hdb_model.pkl` (13 MB), `price_model/catboost_test_predictions.csv` (19,358 rows); diagnostic PNGs removed (view inline only)
+
+9. **`price_model/random_forest_modelling.ipynb`** — Random Forest model using the same feature set as OLS/CatBoost. `drop_first=False` OHE (all dummies kept). RMSE = $41,008, Linlin Loss = $42,330. Model not yet serialised — run `joblib.dump(rf_model, 'backend/price_model/random_forest_model.joblib')` to save.
+
+10. **`backend/user_input.py`** — Standalone script for single-address feature engineering (no pipeline re-run needed). Inputs: `POSTAL_CODE`, `FLAT_TYPE`, `FLOOR_CATEGORY` (Low/Mid/High), `REMAINING_LEASE`. Auto-detects HDB town via point-in-polygon against `data/ura_planning_area_2019.geojson` + URA→HDB name mapping; override via `TOWN_OVERRIDE`. Computes all 9 model distance features + `num_parks_1km`. Commented-out section shows how to load the RF model and generate a price prediction.
+
+11. **`backend/similar_past_transactions.py`** — Comparable sales lookup script. Inputs: `POSTAL_CODE`, `FLAT_TYPE` (optional), `FLOOR_CATEGORY` (optional), `RADIUS_M` (default 200). Reverse-looks up lat/lon from `data/geocode_cache.json` (no API needed), filters 2025 transactions within the radius, and applies optional flat type / floor category filters. Caches the 2025-filtered dataset at `merged_data/[PAST_TRANSACTIONS]hdb_with_amenities_macro.csv` on first run for fast subsequent lookups. Returns full-featured DataFrame (all 39 source columns + `dist_from_input_m`). Saves results to `outputs/similar_past_transactions.csv`.
 
 ---
 
@@ -48,8 +56,9 @@ All pipeline notebooks moved to `backend/data_pipeline/`. All relative paths upd
 - **`download_data.py` path fix**: `DATA_DIR` corrected to `Path(__file__).parent.parent.parent / "data"` — re-run if any raw files landed in `backend/data/` by mistake.
 
 ### Price Model (backend/price_model/)
-- **Next models to implement:** Random Forest, XGBoost (or other non-linear models) using the same feature set and train/test split as the OLS baseline
-- **Model comparison notebook:** Once all models are implemented, build a final comparison notebook computing composite 50/50 RMSE + Linlin scores across models
+- **Update CatBoost and RF notebooks** to match OLS changes: include 1 ROOM/MULTI-GENERATION, add `num_parks_1km`, rename test→validation split, use pre-computed CSV columns directly.
+- **Serialise RF model:** Run `joblib.dump(rf_model, 'backend/price_model/random_forest_model.joblib')` at the end of `random_forest_modelling.ipynb` to enable the `user_input.py` prediction section.
+- **Model comparison notebook:** Build a final comparison notebook computing composite 50/50 RMSE + Linlin scores across OLS, CatBoost, Elastic Net, and RF.
 
 ### Future MRT Pipeline
 - **11 unmatched stations** in `future_mrt_stations_with_coords.csv` (null lat/lon). Investigate whether names need to be adjusted to match the GeoJSON, or whether these stations are intentionally absent from Master Plan 2025.
