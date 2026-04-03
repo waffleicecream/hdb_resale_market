@@ -8,7 +8,7 @@ Raw data files from data.gov.sg are not stored in the repo. Download them first:
 python backend/data_pipeline/download_data.py
 ```
 
-This fetches 6 files into `data/` (skips any that already exist). The other data files (`shoppingmalls.csv`, `percentagechangeinCPImonthly.xlsx`, `MedianResalePricesforRegisteredApplicationsbyTownandFlatType.csv`) are kept in the repo as they are not available via data.gov.sg.
+This fetches 6 files into `data/` (skips any that already exist). The other data files (`shoppingmalls.csv`) are kept in the repo as they are not available via data.gov.sg.
 
 For notebooks 2 and 3, create `../.env` from the provided template and fill in your OneMap credentials ([register here](https://www.onemap.gov.sg/apidocs/)):
 ```bash
@@ -37,7 +37,6 @@ All pipeline notebooks live in `data_pipeline/`. Run them in this order:
 | `ResaleflatpricesbasedonregistrationdatefromJan2017onwards.csv` | Main dataset: 224,541 individual HDB resale transactions with property details (town, flat type, floor area, storey, lease, price). |
 | `HDBResalePriceIndex1Q2009100Quarterly.csv` | Quarterly HDB Resale Price Index (RPI). Base period: 2009-Q1 = 100. |
 | `MedianResalePricesforRegisteredApplicationsbyTownandFlatType.csv` | Quarterly median resale prices aggregated by town and flat type. |
-| `percentagechangeinCPImonthly.xlsx` | Monthly CPI percentage change data. |
 | `HawkerCentresGEOJSON.geojson` | Hawker centre point locations with `STATUS` and `EST_ORIGINAL_COMPLETION_DATE` fields. Used by notebook 4. |
 | `Generalinformationofschools.csv` | MOE school directory. Filtered to `mainlevel_code == 'PRIMARY'` for primary school distance computation in notebook 4. |
 | `Parks.geojson` | NParks managed green space point locations. Non-park features (playgrounds, car parks, terminals, etc.) are excluded before distance computation in notebook 4. |
