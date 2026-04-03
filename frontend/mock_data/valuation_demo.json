@@ -1,30 +1,108 @@
 {
   "postal_code": "310058",
+  "block": "58",
+  "street": "Lor 4 Toa Payoh",
   "flat_type": "4-Room",
-  "storey_range": "11 to 15",
+  "storey_level_bin": "Medium",
+  "remaining_lease_bin": "60-75 years",
   "address": "Blk 58 Lor 4 Toa Payoh",
-  "town": "Toa Payoh",
-  "remaining_lease": "40 years 3 months",
+  "town": "TOA PAYOH",
+  "remaining_lease": "68 years 3 months",
   "lat": 1.3321,
   "lon": 103.8479,
   "projection": {
-    "lower_bound": 512000,
-    "upper_bound": 598000,
-    "median": 548000
+    "p15": 512000,
+    "p85": 598000
   },
-  "nearby_transactions": [
-    { "flat_type": "4-Room", "floor_range": "11 to 15", "month": "Dec 2025", "price": 548000 },
-    { "flat_type": "4-Room", "floor_range": "6 to 10",  "month": "Nov 2025", "price": 525000 },
-    { "flat_type": "4-Room", "floor_range": "16 to 20", "month": "Nov 2025", "price": 572000 },
-    { "flat_type": "4-Room", "floor_range": "11 to 15", "month": "Oct 2025", "price": 538000 },
-    { "flat_type": "5-Room", "floor_range": "11 to 15", "month": "Dec 2025", "price": 618000 },
-    { "flat_type": "3-Room", "floor_range": "6 to 10",  "month": "Nov 2025", "price": 398000 }
+  "past_transactions": [
+    { "blk": "58", "street": "Lor 4 Toa Payoh", "floor": "11 to 15", "flat_type": "4-Room", "price": 548000, "date": "Dec 2025" },
+    { "blk": "58", "street": "Lor 4 Toa Payoh", "floor": "06 to 10", "flat_type": "4-Room", "price": 532000, "date": "Nov 2025" },
+    { "blk": "60", "street": "Lor 4 Toa Payoh", "floor": "11 to 15", "flat_type": "4-Room", "price": 555000, "date": "Nov 2025" },
+    { "blk": "58", "street": "Lor 4 Toa Payoh", "floor": "11 to 15", "flat_type": "4-Room", "price": 541000, "date": "Oct 2025" },
+    { "blk": "62", "street": "Lor 4 Toa Payoh", "floor": "06 to 10", "flat_type": "4-Room", "price": 528000, "date": "Sep 2025" }
   ],
-  "similar_flats": [
-    { "flat_type": "4-Room", "month": "Dec 2025", "price": 542000, "town": "Ang Mo Kio", "address": "Blk 312 Ang Mo Kio Ave 5" },
-    { "flat_type": "4-Room", "month": "Dec 2025", "price": 528000, "town": "Bishan",     "address": "Blk 145 Bishan St 11" },
-    { "flat_type": "4-Room", "month": "Nov 2025", "price": 518000, "town": "Serangoon",  "address": "Blk 88 Serangoon North Ave 4" },
-    { "flat_type": "4-Room", "month": "Nov 2025", "price": 535000, "town": "Geylang",    "address": "Blk 14 Geylang Lor 3" },
-    { "flat_type": "4-Room", "month": "Oct 2025", "price": 498000, "town": "Hougang",    "address": "Blk 678 Hougang Ave 8" }
+  "graph_trend": [
+    { "quarter": "Q1 2023", "avg_price": 488000, "n_transactions": 3 },
+    { "quarter": "Q2 2023", "avg_price": 495000, "n_transactions": 5 },
+    { "quarter": "Q3 2023", "avg_price": 502000, "n_transactions": 4 },
+    { "quarter": "Q4 2023", "avg_price": 510000, "n_transactions": 6 },
+    { "quarter": "Q1 2024", "avg_price": 515000, "n_transactions": 4 },
+    { "quarter": "Q2 2024", "avg_price": 522000, "n_transactions": 7 },
+    { "quarter": "Q3 2024", "avg_price": 531000, "n_transactions": 5 },
+    { "quarter": "Q4 2024", "avg_price": 538000, "n_transactions": 6 },
+    { "quarter": "Q1 2025", "avg_price": 542000, "n_transactions": 4 },
+    { "quarter": "Q2 2025", "avg_price": 548000, "n_transactions": 8 },
+    { "quarter": "Q3 2025", "avg_price": 553000, "n_transactions": 5 },
+    { "quarter": "Q4 2025", "avg_price": 558000, "n_transactions": 6 }
+  ],
+  "current_listings": [
+    {
+      "rank": 1,
+      "blk": "60",
+      "street": "Lor 4 Toa Payoh",
+      "flat_type": "4-Room",
+      "storey_display": "Medium 06\u201312",
+      "storey_level_bin": "Medium",
+      "remaining_lease": "67 years",
+      "remaining_lease_bin": "60-75 years",
+      "asking_price": 568000,
+      "match_pct": 100,
+      "match_reasons": ["Same storey", "Same lease"],
+      "lat": 1.3323,
+      "lon": 103.8483,
+      "hdb_link": "https://homes.hdb.gov.sg/home/finding-a-flat",
+      "listing_active": true
+    },
+    {
+      "rank": 2,
+      "blk": "62",
+      "street": "Lor 4 Toa Payoh",
+      "flat_type": "4-Room",
+      "storey_display": "Medium 06\u201312",
+      "storey_level_bin": "Medium",
+      "remaining_lease": "68 years",
+      "remaining_lease_bin": "60-75 years",
+      "asking_price": 578000,
+      "match_pct": 100,
+      "match_reasons": ["Same storey", "Same lease"],
+      "lat": 1.3319,
+      "lon": 103.8476,
+      "hdb_link": "https://homes.hdb.gov.sg/home/finding-a-flat",
+      "listing_active": true
+    },
+    {
+      "rank": 3,
+      "blk": "55",
+      "street": "Lor 4 Toa Payoh",
+      "flat_type": "4-Room",
+      "storey_display": "High 13+",
+      "storey_level_bin": "High",
+      "remaining_lease": "66 years",
+      "remaining_lease_bin": "60-75 years",
+      "asking_price": 590000,
+      "match_pct": 85,
+      "match_reasons": ["Adjacent storey", "Same lease"],
+      "lat": 1.3325,
+      "lon": 103.8472,
+      "hdb_link": "https://homes.hdb.gov.sg/home/finding-a-flat",
+      "listing_active": true
+    },
+    {
+      "rank": 4,
+      "blk": "45",
+      "street": "Lor 8 Toa Payoh",
+      "flat_type": "4-Room",
+      "storey_display": "Medium 06\u201312",
+      "storey_level_bin": "Medium",
+      "remaining_lease": "65 years",
+      "remaining_lease_bin": "60-75 years",
+      "asking_price": 605000,
+      "match_pct": 85,
+      "match_reasons": ["Same storey", "Same lease"],
+      "lat": 1.3315,
+      "lon": 103.8490,
+      "hdb_link": "https://homes.hdb.gov.sg/home/finding-a-flat",
+      "listing_active": false
+    }
   ]
 }
