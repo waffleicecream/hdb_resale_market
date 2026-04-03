@@ -1,6 +1,6 @@
 # PROGRESS.md — HDB Resale Market Project
 
-_Last updated: 2026-04-03 (session 8)_
+_Last updated: 2026-04-03 (session 9)_
 
 ---
 
@@ -43,7 +43,7 @@ All pipeline notebooks moved to `backend/data_pipeline/`. All relative paths upd
 
 9. **`price_model/random_forest_modelling.ipynb`** — Random Forest model using the same feature set as OLS/CatBoost. `drop_first=False` OHE (all dummies kept). RMSE = $41,008, Linlin Loss = $42,330. Model not yet serialised — run `joblib.dump(rf_model, 'backend/price_model/random_forest_model.joblib')` to save.
 
-10. **`backend/user_input.py`** — Standalone script for single-address feature engineering (no pipeline re-run needed). Inputs: `POSTAL_CODE`, `FLAT_TYPE`, `FLOOR_CATEGORY` (Low/Mid/High), `REMAINING_LEASE`. Auto-detects HDB town via point-in-polygon against `data/ura_planning_area_2019.geojson` + URA→HDB name mapping; override via `TOWN_OVERRIDE`. Computes all 9 model distance features + `num_parks_1km`. Commented-out section shows how to load the RF model and generate a price prediction.
+10. **`backend/user_input.py`** — Standalone script for single-address feature engineering (no pipeline re-run needed). **No OneMap API required** — fully offline using static cache files. Inputs: `POSTAL_CODE`, `FLAT_TYPE`, `FLOOR_CATEGORY` (Low/Mid/High), `REMAINING_LEASE`. Geocodes via `data/geocode_cache.json` (postal code reverse-lookup). Finds nearest train station from `MasterPlan2025RailStationLayer.geojson` (polygon centroids) + line codes from `data/train_cache.json`. Auto-detects HDB town via point-in-polygon. Computes all 10 continuous model features + 3 categorical. Outputs a 1-row `df` DataFrame (24 columns) combining `features` dict (13 model inputs incl. `num_primary_1km`, `num_parks_1km`) and `info` dict (11 informational fields: names, pipe-separated 1km school/park lists, `dist_cbd_m`). Commented-out section shows how to load the RF model and generate a price prediction.
 
 11. **`backend/similar_past_transactions.py`** — Comparable sales lookup script. Inputs: `POSTAL_CODE`, `FLAT_TYPE` (optional), `FLOOR_CATEGORY` (optional), `RADIUS_M` (default 200). Reverse-looks up lat/lon from `data/geocode_cache.json` (no API needed), filters 2025 transactions within the radius, and applies optional flat type / floor category filters. Caches the 2025-filtered dataset at `merged_data/[PAST_TRANSACTIONS]hdb_with_amenities_macro.csv` on first run for fast subsequent lookups. Returns full-featured DataFrame (all 39 source columns + `dist_from_input_m`). Saves results to `outputs/similar_past_transactions.csv`.
 
