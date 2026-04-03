@@ -2,59 +2,78 @@
   "flats": {
     "Flat A": {
       "postal_code": "310058",
-      "address": "Blk 58 Lor 4 Toa Payoh",
-      "town": "Toa Payoh",
-      "flat_type": "4-Room"
+      "address": "Blk 58, 310058",
+      "town": "Toa Payoh Central",
+      "flat_type": "4-Room",
+      "demand_zone": "High Demand Zone",
+      "image_url": null,
+      "lat": 1.3329,
+      "lon": 103.8490
     },
     "Flat B": {
-      "postal_code": "560234",
-      "address": "Blk 234 Ang Mo Kio Ave 3",
-      "town": "Ang Mo Kio",
-      "flat_type": "5-Room"
+      "postal_code": "520123",
+      "address": "Blk 123, 520123",
+      "town": "Tampines East",
+      "flat_type": "5-Room",
+      "demand_zone": "Market Average",
+      "image_url": null,
+      "lat": 1.3520,
+      "lon": 103.9440
     },
     "Flat C": {
-      "postal_code": "820412",
-      "address": "Blk 412 Punggol Place",
-      "town": "Punggol",
-      "flat_type": "4-Room"
+      "postal_code": "640211",
+      "address": "Blk 211, 640211",
+      "town": "Jurong West",
+      "flat_type": "4-Room",
+      "demand_zone": "Limited Supply Area",
+      "image_url": null,
+      "lat": 1.3480,
+      "lon": 103.7060
     }
   },
   "nearest": {
     "Flat A": {
-      "mrt_station":   { "name": "Toa Payoh MRT (NS19)", "distance_m": 320, "walk_min": 4 },
-      "shopping_mall": { "name": "HDB Hub", "distance_m": 480, "walk_min": 6 },
-      "hawker_centre": { "name": "Lor 4 Toa Payoh Market & Food Centre", "distance_m": 150, "walk_min": 2 },
-      "polyclinic":    { "name": "Toa Payoh Polyclinic", "distance_m": 680, "walk_min": 8 },
-      "sports_hall":   { "name": "Toa Payoh Sports Hall", "distance_m": 890, "walk_min": 11 }
+      "mrt_station":   { "name": "Toa Payoh MRT",        "distance_m": 280,  "walk_min": 4  },
+      "shopping_mall": { "name": "HDB Hub / Mall",        "distance_m": 320,  "walk_min": 5  },
+      "hawker_centre": { "name": "Toa Payoh West Hawker", "distance_m": 150,  "walk_min": 2  },
+      "polyclinic":    { "name": "Toa Payoh Polyclinic",  "distance_m": 450,  "walk_min": 7  },
+      "sports_hall":   { "name": "TP Sports Hall",        "distance_m": 600,  "walk_min": 9  }
     },
     "Flat B": {
-      "mrt_station":   { "name": "Ang Mo Kio MRT (NS16)", "distance_m": 640, "walk_min": 8 },
-      "shopping_mall": { "name": "AMK Hub", "distance_m": 650, "walk_min": 8 },
-      "hawker_centre": { "name": "Ang Mo Kio Ave 3 Market", "distance_m": 210, "walk_min": 3 },
-      "polyclinic":    { "name": "Ang Mo Kio Polyclinic", "distance_m": 720, "walk_min": 9 },
-      "sports_hall":   { "name": "Ang Mo Kio Sports Hall", "distance_m": 1200, "walk_min": 15 }
+      "mrt_station":   { "name": "Tampines East MRT",     "distance_m": 650,  "walk_min": 9  },
+      "shopping_mall": { "name": "Tampines Mall / One",   "distance_m": 400,  "walk_min": 6  },
+      "hawker_centre": { "name": "Our Tampines Hub",      "distance_m": 380,  "walk_min": 5  },
+      "polyclinic":    { "name": "Tampines Polyclinic",   "distance_m": 1200, "walk_min": 15 },
+      "sports_hall":   { "name": "Tampines Sports Centre","distance_m": 380,  "walk_min": 5  }
     },
     "Flat C": {
-      "mrt_station":   { "name": "Punggol MRT (NE17)", "distance_m": 980, "walk_min": 12 },
-      "shopping_mall": { "name": "Waterway Point", "distance_m": 1050, "walk_min": 13 },
-      "hawker_centre": { "name": "Punggol 21 Hawker Centre", "distance_m": 430, "walk_min": 5 },
-      "polyclinic":    { "name": "Punggol Polyclinic", "distance_m": 1340, "walk_min": 17 },
-      "sports_hall":   { "name": "Sengkang Sports Hall", "distance_m": 1580, "walk_min": 20 }
+      "mrt_station":   { "name": "Jurong West MRT (U/C)", "distance_m": 1100, "walk_min": 14 },
+      "shopping_mall": { "name": "Boon Lay Shopping Ctr", "distance_m": 850,  "walk_min": 11 },
+      "hawker_centre": { "name": "Jurong West Hawker",    "distance_m": 500,  "walk_min": 7  },
+      "polyclinic":    { "name": "Jurong Polyclinic",     "distance_m": 210,  "walk_min": 3  },
+      "sports_hall":   { "name": "Jurong West Sports Hall","distance_m": 900,  "walk_min": 12 }
     }
   },
   "within_1km": {
     "Flat A": {
-      "primary_schools": ["Kheng Cheng School", "Pei Chun Public School", "St. Joseph's Institution Junior"],
+      "primary_schools": ["Pei Chun Public School", "CHIJ Primary (TP)", "Kheng Cheng School"],
       "parks": ["Toa Payoh Town Park", "Toa Payoh Stadium Park"]
     },
     "Flat B": {
-      "primary_schools": ["Ai Tong School", "CHIJ St. Nicholas Girls' School (Primary)", "Ang Mo Kio Primary School"],
-      "parks": ["Ang Mo Kio Town Garden West", "Bishan-Ang Mo Kio Park"]
+      "primary_schools": ["Tampines Primary School", "Chongzheng Primary"],
+      "parks": ["Tampines Eco Green", "Bedok Reservoir Park"]
     },
     "Flat C": {
-      "primary_schools": ["Mee Toh School", "Punggol Green Primary School", "Edgefield Primary School", "Greendale Primary School"],
-      "parks": ["Punggol Waterway Park", "Sengkang Riverside Park"]
+      "primary_schools": ["Boon Lay Garden Primary", "Rulang Primary School", "Shuqun Primary School", "Corporation Primary"],
+      "parks": ["Jurong Lake Gardens", "Boon Lay Nature Park"]
     }
   },
-  "llm_summary": "Flat A in Toa Payoh offers the most mature amenity profile of the three, with a hawker centre just 150m away and Toa Payoh MRT within a 4-minute walk, providing excellent connectivity via the North-South Line. Flat B in Ang Mo Kio has the advantage of a lower-distance hawker centre at 210m and is located close to AMK Hub for retail needs, though its MRT access at 640m is the furthest of the three. Flat C in Punggol is situated in a newer estate and has the highest concentration of primary schools within 1km — four in total, including Mee Toh and Punggol Green Primary — making it particularly well-positioned for families with school-going children, though its distance to the MRT station and shopping mall is the greatest among the three."
+  "proximity_thresholds": {
+    "mrt_station":   [400, 800, 1200],
+    "shopping_mall": [500, 1000, 1500],
+    "hawker_centre": [200, 400, 700],
+    "polyclinic":    [500, 1000, 2000],
+    "sports_hall":   [600, 1200, 2000]
+  },
+  "llm_summary": "Flat A (310058) offers the superior transit-oriented lifestyle with an \"Exceptional\" proximity rating for MRT access at just 280m. While Flat C dominates in primary education density and polyclinic proximity, its current transit connectivity is limited compared to the central properties. Flat B balances retail access with strong sports and hawker convenience."
 }
