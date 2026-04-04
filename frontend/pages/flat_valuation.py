@@ -308,13 +308,23 @@ def get_ols_prediction(block, street_upper, town, flat_type_ui, floor_category, 
 def _meta_from_postal(postal):
     """
     Return a meta dict for this postal code.
-    Tries enriched CSV first (has flat_type/lease), falls back to geocode cache.
+    Tries enriched CSV first (has flat_type/lease).
+    If lat/lon is missing from enriched, patches from geocode cache.
+    Falls back to geocode cache entirely if not in enriched.
     """
+    import pandas as _pd
     p = str(postal).strip().zfill(6)
     if not _ENRICHED.empty:
         match = _ENRICHED[_ENRICHED["postal_code"].astype(str).str.zfill(6) == p]
         if not match.empty:
-            return match.iloc[0].to_dict()
+            row = match.iloc[0].to_dict()
+            # Patch missing lat/lon from geocode cache
+            if not _pd.notna(row.get("lat")) or not _pd.notna(row.get("lon")):
+                g = _GEOCODE_LOOKUP.get(p)
+                if g:
+                    row["lat"] = g.get("lat")
+                    row["lon"] = g.get("lon")
+            return row
     # Fallback: geocode cache gives lat/lon/block/street; town from amenity lookup
     g = _GEOCODE_LOOKUP.get(p)
     if g is None:
