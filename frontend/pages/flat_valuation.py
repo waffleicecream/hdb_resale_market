@@ -142,8 +142,8 @@ _STOREY_MAP = {"Low": "Low", "Medium": "Mid", "High": "High"}
 
 # ── Amenity pin data loaded once at startup ────────────────────
 def _load_amenity_pins():
-    """Load malls, schools, healthcare into a dict of lists {lat, lon, name, type}."""
-    pins = {"mall": [], "school": [], "healthcare": []}
+    """Load malls, schools, healthcare, MRT, hawker into lists of {lat, lon, name}."""
+    pins = {"mall": [], "school": [], "healthcare": [], "mrt": [], "hawker": []}
 
     # Malls: data/shoppingmalls.csv
     mall_path = os.path.join(_DATA, "shoppingmalls.csv")
@@ -153,15 +153,15 @@ def _load_amenity_pins():
             pins["mall"].append({"lat": float(r["lat"]), "lon": float(r["lon"]),
                                   "name": str(r.get("name", "Mall"))})
 
-    # Schools: data/school_geocode_cache.json — keyed by postal, value {lat, lon}
-    school_path = os.path.join(_DATA, "school_geocode_cache.json")
+    # Schools: data/school_name_locs.json — keyed by school name, value {lat, lon}
+    school_path = os.path.join(_DATA, "school_name_locs.json")
     if os.path.exists(school_path):
         with open(school_path, encoding="utf-8") as f:
             scache = json.load(f)
         for name, v in scache.items():
             if isinstance(v, dict) and v.get("lat") and v.get("lon"):
                 pins["school"].append({"lat": float(v["lat"]), "lon": float(v["lon"]),
-                                        "name": str(name)})
+                                        "name": str(name).title()})
 
     # Healthcare: data/healthcare_geocode_cache.json — keyed by postal, value {lat, lon}
     health_path = os.path.join(_DATA, "healthcare_geocode_cache.json")
@@ -171,7 +171,31 @@ def _load_amenity_pins():
         for postal, v in hcache.items():
             if isinstance(v, dict) and v.get("lat") and v.get("lon"):
                 pins["healthcare"].append({"lat": float(v["lat"]), "lon": float(v["lon"]),
-                                            "name": f"Clinic/Hospital ({postal})"})
+                                            "name": f"Healthcare ({postal})"})
+
+    # MRT/LRT: data/mrt_approx_locs.json — keyed by station name, value {lat, lon, line}
+    mrt_path = os.path.join(_DATA, "mrt_approx_locs.json")
+    if os.path.exists(mrt_path):
+        with open(mrt_path, encoding="utf-8") as f:
+            mcache = json.load(f)
+        for name, v in mcache.items():
+            if isinstance(v, dict) and v.get("lat") and v.get("lon"):
+                line = v.get("line", "")
+                label = str(name).title().replace("Mrt Station", "MRT").replace("Lrt Station", "LRT")
+                hover = f"{label}" + (f" ({line})" if line else "")
+                pins["mrt"].append({"lat": float(v["lat"]), "lon": float(v["lon"]),
+                                     "name": hover})
+
+    # Hawker: data/hawker_approx_locs.json — keyed by name, value {lat, lon}
+    hawker_path = os.path.join(_DATA, "hawker_approx_locs.json")
+    if os.path.exists(hawker_path):
+        with open(hawker_path, encoding="utf-8") as f:
+            hkcache = json.load(f)
+        for name, v in hkcache.items():
+            if isinstance(v, dict) and v.get("lat") and v.get("lon"):
+                pins["hawker"].append({"lat": float(v["lat"]), "lon": float(v["lon"]),
+                                        "name": str(name)})
+
     return pins
 
 _AMENITY_PINS = _load_amenity_pins()
@@ -387,36 +411,46 @@ def get_nearby_trends(lat, lon, flat_type_ui, floor_category, street_upper_fallb
 
 
 def get_past_transactions(lat, lon, flat_type_ui, floor_category, street_upper_fallback, n=10):
-    """Return list of {date, block, street, floor, flat_type, price} for the table."""
+    """Return list of {date, block, street, floor, flat_type, price, lat, lon} for table + map."""
     if _PAST_TXN.empty:
         return []
     sub, fc, _ = _get_nearby_txns(lat, lon, flat_type_ui, floor_category, street_upper_fallback)
     sub = sub.sort_values("month", ascending=False).head(n)
     return [
         {"date": r["month"], "block": str(r["block"]), "street": str(r["street_name"]),
-         "floor": r["storey_range"], "flat_type": r["flat_type"], "price": int(r["resale_price"])}
+         "floor": r["storey_range"], "flat_type": r["flat_type"], "price": int(r["resale_price"]),
+         "lat": float(r["lat"]) if pd.notna(r.get("lat")) else None,
+         "lon": float(r["lon"]) if pd.notna(r.get("lon")) else None}
         for _, r in sub.iterrows()
     ]
 
 
-def get_current_listings(town, flat_type_ui, floor_category, p15, p85):
+def get_current_listings(town, flat_type_ui, floor_category, p15, p85, street_upper=None, scope="town"):
     """
-    Same-town listings: same flat_type + floor_category, sorted cheapest first.
-    Shows all with lat/lon on map; those without still appear in cards.
+    Current listings filtered by scope:
+      scope='town'   — same town + flat_type + floor_category, cheapest first
+      scope='street' — same street + flat_type + floor_category, cheapest first
     """
     if _ENRICHED.empty:
         return []
     ft_norm = _FT_MAP.get(flat_type_ui, flat_type_ui.upper())
     fc = _STOREY_MAP.get(floor_category, floor_category)
-    town_upper = str(town).replace(" Town", "").strip().upper()
 
-    sub = _ENRICHED[
-        (_ENRICHED["town"].str.upper().str.replace(" TOWN", "", regex=False).str.strip() == town_upper) &
+    base_mask = (
         (_ENRICHED["flat_type_norm"] == ft_norm) &
         (_ENRICHED["floor_category"] == fc) &
         (_ENRICHED["price_numeric"].notna()) &
         (_ENRICHED["scrape_failed"] == False)
-    ].sort_values("price_numeric").head(10)
+    )
+    if scope == "street" and street_upper:
+        mask = base_mask & (_ENRICHED["street"].str.upper().str.strip() == street_upper)
+    else:
+        town_upper = str(town).replace(" Town", "").strip().upper()
+        mask = base_mask & (
+            _ENRICHED["town"].str.upper().str.replace(" TOWN", "", regex=False).str.strip() == town_upper
+        )
+
+    sub = _ENRICHED[mask].sort_values("price_numeric").head(10)
 
     listings = []
     for rank, (_, r) in enumerate(sub.iterrows(), 1):
@@ -475,13 +509,15 @@ def build_real_data(postal, flat_type_ui, storey_bin, lease_bin):
     flat_lon = float(meta["lon"]) if pd.notna(meta.get("lon")) else None
 
     trends, trend_source = get_nearby_trends(flat_lat, flat_lon, flat_type_ui, storey_bin, street_upper)
-    txns     = get_past_transactions(flat_lat, flat_lon, flat_type_ui, storey_bin, street_upper)
-    listings = get_current_listings(town, flat_type_ui, storey_bin, p15, p85)
+    txns          = get_past_transactions(flat_lat, flat_lon, flat_type_ui, storey_bin, street_upper)
+    listings_town = get_current_listings(town, flat_type_ui, storey_bin, p15, p85, street_upper, scope="town")
+    listings_street = get_current_listings(town, flat_type_ui, storey_bin, p15, p85, street_upper, scope="street")
 
     return {
         "address": f"Blk {meta['block']} {meta['street'].title()}",
         "postal_code": str(postal).strip(),
         "town": town.title(),
+        "street_upper": street_upper,
         "lat": flat_lat or 1.3521,
         "lon": flat_lon or 103.8198,
         "flat_type": flat_type_ui,
@@ -492,7 +528,8 @@ def build_real_data(postal, flat_type_ui, storey_bin, lease_bin):
         "graph_trend": trends,
         "_trend_source": trend_source,
         "past_transactions": txns,
-        "current_listings": listings,
+        "current_listings": listings_town,
+        "current_listings_street": listings_street,
         "_model_note": model_note,
     }
 
@@ -956,44 +993,95 @@ def valuation_insight(data, listing_price, verdict, p15, p85):
     ])
 
 
-# ── Map: all pins ──────────────────────────────────────────────
-_AMENITY_STYLE = {
-    "mall":       {"color": "#7C3AED", "symbol": "shop",    "label": "Mall"},
-    "school":     {"color": "#D97706", "symbol": "school",  "label": "School"},
-    "healthcare": {"color": "#DC2626", "symbol": "hospital","label": "Healthcare"},
+# ── Map layer config ───────────────────────────────────────────
+_LAYER_STYLE = {
+    "mrt":        {"color": "#1C4ED8", "size": 12, "label": "MRT/LRT"},
+    "school":     {"color": "#D97706", "size": 10, "label": "School"},
+    "mall":       {"color": "#7C3AED", "size": 10, "label": "Mall"},
+    "healthcare": {"color": "#DC2626", "size": 10, "label": "Healthcare"},
+    "hawker":     {"color": "#059669", "size": 10, "label": "Hawker"},
 }
 
-def make_listings_map(user_lat, user_lon, user_address, listings, amenity_pins=None):
+def _nearby_amenity_pts(pts, user_lat, user_lon, radius_m=3000):
+    """Filter a list of {lat, lon, name} to within radius_m of (user_lat, user_lon)."""
+    R = 6_371_000
+    out = []
+    for p in pts:
+        dlat = np.radians(p["lat"] - user_lat)
+        dlon = np.radians(p["lon"] - user_lon)
+        a = (np.sin(dlat / 2) ** 2
+             + np.cos(np.radians(user_lat)) * np.cos(np.radians(p["lat"]))
+             * np.sin(dlon / 2) ** 2)
+        if R * 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a)) <= radius_m:
+            out.append(p)
+    return out
+
+
+def make_listings_map(user_lat, user_lon, user_address, listings,
+                       past_txns=None, active_layers=None, amenity_pins=None):
+    """
+    Build the interactive map figure.
+    active_layers: set/list of layer names to show — any of
+      'current', 'past', 'mrt', 'school', 'mall', 'healthcare', 'hawker'
+    """
+    if active_layers is None:
+        active_layers = {"current", "mrt", "school", "mall", "healthcare", "hawker"}
+    active_layers = set(active_layers)
+
     fig = go.Figure()
 
-    # Amenity pins filtered to within 3km of the subject flat
+    # ── Amenity layers ──────────────────────────────────────────
     if amenity_pins:
-        R = 6_371_000
-        for atype, style in _AMENITY_STYLE.items():
-            pts = amenity_pins.get(atype, [])
-            nearby = []
-            for p in pts:
-                dlat = np.radians(p["lat"] - user_lat)
-                dlon = np.radians(p["lon"] - user_lon)
-                a = (np.sin(dlat / 2) ** 2
-                     + np.cos(np.radians(user_lat)) * np.cos(np.radians(p["lat"]))
-                     * np.sin(dlon / 2) ** 2)
-                dist = R * 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
-                if dist <= 3000:
-                    nearby.append(p)
-            if nearby:
-                fig.add_trace(go.Scattermapbox(
-                    lat=[p["lat"] for p in nearby],
-                    lon=[p["lon"] for p in nearby],
-                    mode="markers",
-                    marker=go.scattermapbox.Marker(size=10, color=style["color"]),
-                    hovertext=[f"<b>{style['label']}</b><br>{p['name']}" for p in nearby],
-                    hoverinfo="text",
-                    name=style["label"],
-                    showlegend=True,
-                ))
+        for atype, style in _LAYER_STYLE.items():
+            if atype not in active_layers:
+                continue
+            pts = _nearby_amenity_pts(amenity_pins.get(atype, []), user_lat, user_lon)
+            if not pts:
+                continue
+            fig.add_trace(go.Scattermapbox(
+                lat=[p["lat"] for p in pts],
+                lon=[p["lon"] for p in pts],
+                mode="markers",
+                marker=go.scattermapbox.Marker(size=style["size"], color=style["color"],
+                                               opacity=0.85),
+                hovertext=[f"<b>{style['label']}</b><br>{p['name']}" for p in pts],
+                hoverinfo="text",
+                name=style["label"],
+                showlegend=False,
+            ))
 
-    # Subject flat
+    # ── Past transactions (grey dots) ──────────────────────────
+    if "past" in active_layers and past_txns:
+        fig.add_trace(go.Scattermapbox(
+            lat=[t["lat"] for t in past_txns if t.get("lat")],
+            lon=[t["lon"] for t in past_txns if t.get("lon")],
+            mode="markers",
+            marker=go.scattermapbox.Marker(size=9, color="#9CA3AF", opacity=0.7),
+            hovertext=[
+                f"<b>Past: Blk {t['block']} {t['street']}</b><br>"
+                f"{t['floor']} · {t['flat_type']} · ${t['price']:,} ({t['date']})"
+                for t in past_txns if t.get("lat")
+            ],
+            hoverinfo="text",
+            name="Past transactions",
+            showlegend=False,
+        ))
+
+    # ── Current listings (green numbered dots) ─────────────────
+    if "current" in active_layers:
+        for lst in [l for l in listings if l.get("lat") is not None]:
+            fig.add_trace(go.Scattermapbox(
+                lat=[lst["lat"]], lon=[lst["lon"]], mode="markers+text",
+                marker=go.scattermapbox.Marker(size=16, color="#16A34A"),
+                text=[str(lst["rank"])],
+                textfont=dict(size=9, color="white"),
+                hovertext=[f"<b>#{lst['rank']} Blk {lst['blk']} {lst['street']}</b><br>"
+                           f"Asking: ${lst['asking_price']:,}"],
+                hoverinfo="text",
+                showlegend=False,
+            ))
+
+    # ── Subject flat (always shown) ─────────────────────────────
     fig.add_trace(go.Scattermapbox(
         lat=[user_lat], lon=[user_lon], mode="markers+text",
         marker=go.scattermapbox.Marker(size=20, color="#1C4ED8"),
@@ -1002,48 +1090,26 @@ def make_listings_map(user_lat, user_lon, user_address, listings, amenity_pins=N
         textfont=dict(size=11, color="#1C4ED8"),
         hovertext=[f"<b>Your flat</b><br>{user_address}"],
         hoverinfo="text",
-        name="Your flat",
-        showlegend=True,
+        showlegend=False,
     ))
 
-    # Current listings
-    for lst in [l for l in listings if l.get("lat") is not None]:
-        fig.add_trace(go.Scattermapbox(
-            lat=[lst["lat"]], lon=[lst["lon"]], mode="markers+text",
-            marker=go.scattermapbox.Marker(size=16, color="#16A34A"),
-            text=[str(lst["rank"])],
-            textfont=dict(size=9, color="white"),
-            hovertext=[f"<b>#{lst['rank']} Blk {lst['blk']} {lst['street']}</b><br>"
-                       f"Asking: ${lst['asking_price']:,}"],
-            hoverinfo="text",
-            name="Available listing" if lst["rank"] == 1 else None,
-            showlegend=(lst["rank"] == 1),
-        ))
-
-    mapped = [l for l in listings if l.get("lat") is not None]
-    all_lats = [user_lat] + [l["lat"] for l in mapped]
-    all_lons = [user_lon] + [l["lon"] for l in mapped]
-    center_lat = sum(all_lats) / len(all_lats)
-    center_lon = sum(all_lons) / len(all_lons)
     fig.update_layout(
         mapbox=dict(style="carto-positron", zoom=14,
-                    center={"lat": center_lat, "lon": center_lon}),
+                    center={"lat": user_lat, "lon": user_lon}),
         margin={"r": 0, "t": 0, "l": 0, "b": 0},
         paper_bgcolor="rgba(0,0,0,0)",
-        legend=dict(
-            bgcolor="rgba(255,255,255,0.85)",
-            bordercolor="#E5E7EB",
-            borderwidth=1,
-            font=dict(size=11),
-            x=0.01, y=0.99,
-            xanchor="left", yanchor="top",
-        ),
+        showlegend=False,
     )
     return fig
 
 
 # ── Listing cards ──────────────────────────────────────────────
-def listing_cards(listings, p85):
+def listing_cards(listings, p85, scope="town"):
+    sub_label = (
+        "Same street \u00b7 same flat type \u00b7 same storey \u00b7 cheapest first"
+        if scope == "street" else
+        "Same town \u00b7 same flat type \u00b7 same storey \u00b7 cheapest first"
+    )
     cards = []
     for lst in listings:
         signal = (
@@ -1104,17 +1170,32 @@ def listing_cards(listings, p85):
             ],
         ))
 
+    # Scope toggle buttons
+    scope_toggle = html.Div(style={"display": "flex", "gap": "6px", "marginBottom": "0"}, children=[
+        html.Button("Same Street", id="val-scope-street",
+                    className="scope-btn" + (" scope-btn-active" if scope == "street" else ""),
+                    n_clicks=0),
+        html.Button("Same Town", id="val-scope-town",
+                    className="scope-btn" + (" scope-btn-active" if scope == "town" else ""),
+                    n_clicks=0),
+    ])
+
     return html.Div(className="listings-section", children=[
         html.Div(className="listings-header", children=[
-            html.P("CURRENT MARKET ALTERNATIVES",
-                   className="listings-header-title"),
-            html.P("Same town \u00b7 same flat type \u00b7 same storey level \u00b7 cheapest first",
-                   className="listings-header-sub"),
+            html.Div(style={"display": "flex", "justifyContent": "space-between",
+                            "alignItems": "center", "marginBottom": "4px"}, children=[
+                html.P("CURRENT MARKET ALTERNATIVES", className="listings-header-title",
+                       style={"margin": "0"}),
+                scope_toggle,
+            ]),
+            html.P(sub_label, className="listings-header-sub"),
         ]),
-        html.Div(className="listings-scroll", children=cards) if cards else
-        html.P("No current listings found.",
-               style={"padding": "16px", "color": "var(--color-text-muted)",
-                      "fontSize": "13px"}),
+        html.Div(id="val-listings-body", children=[
+            html.Div(className="listings-scroll", children=cards) if cards else
+            html.P("No current listings found.",
+                   style={"padding": "16px", "color": "var(--color-text-muted)",
+                          "fontSize": "13px"}),
+        ]),
     ])
 
 
@@ -1253,27 +1334,73 @@ def top_right_panel(data, listing_price=None):
     ])
 
 
+# ── Layer toggle config ────────────────────────────────────────
+_MAP_LAYERS = [
+    ("current",    "Current Listings", "#16A34A"),
+    ("past",       "Past Transactions","#9CA3AF"),
+    ("mrt",        "MRT/LRT",          "#1C4ED8"),
+    ("school",     "Schools",          "#D97706"),
+    ("mall",       "Malls",            "#7C3AED"),
+    ("healthcare", "Healthcare",       "#DC2626"),
+    ("hawker",     "Hawker Centres",   "#059669"),
+]
+_DEFAULT_LAYERS = {"current", "past", "mrt", "school", "mall", "healthcare", "hawker"}
+
+
+def layer_toggles(active_layers):
+    """Render pill-style toggle buttons for each map layer."""
+    btns = []
+    for key, label, color in _MAP_LAYERS:
+        is_active = key in active_layers
+        btns.append(html.Button(
+            label,
+            id={"type": "map-layer-btn", "layer": key},
+            n_clicks=0,
+            style={
+                "fontSize": "11px", "padding": "4px 10px",
+                "borderRadius": "20px", "border": "1.5px solid",
+                "cursor": "pointer", "fontWeight": "600",
+                "borderColor": color,
+                "background": color if is_active else "white",
+                "color": "white" if is_active else color,
+                "transition": "all 0.15s",
+            },
+        ))
+    return html.Div(style={"display": "flex", "flexWrap": "wrap", "gap": "6px",
+                           "marginBottom": "10px"}, children=btns)
+
+
 # ── Bottom-left panel: map ─────────────────────────────────────
 def bottom_left_panel(data):
     listings = data.get("current_listings", [])
+    past_txns = data.get("past_transactions", [])
     town = str(data.get("town", "")).upper()
-    map_fig = make_listings_map(data["lat"], data["lon"], data["address"],
-                                listings, amenity_pins=_AMENITY_PINS)
-    title = f"MAP WITH AVAILABLE FLATS IN {town}" if town else "MAP WITH AVAILABLE FLATS"
+    title = f"INTERACTIVE MAP — {town}" if town else "INTERACTIVE MAP"
+
+    map_fig = make_listings_map(
+        data["lat"], data["lon"], data["address"],
+        listings, past_txns=past_txns,
+        active_layers=_DEFAULT_LAYERS,
+        amenity_pins=_AMENITY_PINS,
+    )
+
     return html.Div(className="card val-map-card", children=[
-        html.P(title, className="val-panel-label",
-               style={"marginBottom": "12px"}),
+        html.P(title, className="val-panel-label", style={"marginBottom": "8px"}),
+        layer_toggles(_DEFAULT_LAYERS),
         dcc.Graph(
+            id="val-map-graph",
             figure=map_fig,
             config={"displayModeBar": False, "scrollZoom": True},
             style={"height": "360px"},
         ),
+        # Hidden store: active layers
+        dcc.Store(id="val-map-layers", data=list(_DEFAULT_LAYERS)),
     ])
 
 
 # ── Bottom-right panel: scrollable listings ────────────────────
 def bottom_right_panel(data, p85):
-    return listing_cards(data.get("current_listings", []), p85)
+    return listing_cards(data.get("current_listings", []), p85, scope="town")
 
 
 # ── Overpriced banner (amber style) ───────────────────────────
@@ -1293,6 +1420,17 @@ def valuation_dashboard(data, listing_price=None):
     p85 = data["projection"]["p85"]
 
     children = [
+        # Hidden data store for callbacks
+        dcc.Store(id="val-data-store", data={
+            "lat":                    data["lat"],
+            "lon":                    data["lon"],
+            "address":                data["address"],
+            "town":                   data.get("town", ""),
+            "past_transactions":      data.get("past_transactions", []),
+            "current_listings":       data.get("current_listings", []),
+            "current_listings_street": data.get("current_listings_street", []),
+            "p85":                    p85,
+        }),
         html.Div(className="val-compact-bar", children=[
             html.Div(className="val-compact-inner", children=[
                 input_form(prefill=data, compact=True),
@@ -1413,3 +1551,114 @@ def prefill_from_store(pathname, prefill_data):
     if pathname == "/flat-valuation" and prefill_data:
         return pre_search_layout(prefill_data)
     return no_update
+
+
+# ── Map layer toggle callback ──────────────────────────────────
+@callback(
+    Output("val-map-layers", "data"),
+    Output("val-map-graph", "figure"),
+    Input({"type": "map-layer-btn", "layer": dash.ALL}, "n_clicks"),
+    State("val-map-layers", "data"),
+    State("val-data-store", "data"),
+    prevent_initial_call=True,
+)
+def toggle_map_layer(_n_clicks_list, active_layers, store):  # noqa: ARG001
+    from dash import ctx
+    if not ctx.triggered_id or store is None:
+        return no_update, no_update
+
+    triggered_layer = ctx.triggered_id["layer"]
+    active = set(active_layers or list(_DEFAULT_LAYERS))
+    if triggered_layer in active:
+        active.discard(triggered_layer)
+    else:
+        active.add(triggered_layer)
+
+    # Re-render past_txns with lat/lon for map (need to add lat/lon back)
+    past_txns_raw = store.get("past_transactions", [])
+    # past_transactions in store may not have lat/lon; fetch from _PAST_TXN by matching
+    # Actually build_real_data stores them from _get_nearby_txns which includes lat/lon cols
+    # Store them with lat/lon during get_past_transactions
+    fig = make_listings_map(
+        store["lat"], store["lon"], store["address"],
+        store.get("current_listings", []),
+        past_txns=past_txns_raw,
+        active_layers=active,
+        amenity_pins=_AMENITY_PINS,
+    )
+    return list(active), fig
+
+
+# ── Listing scope toggle callback ──────────────────────────────
+@callback(
+    Output("val-listings-body", "children"),
+    Input("val-scope-street", "n_clicks"),
+    Input("val-scope-town", "n_clicks"),
+    State("val-data-store", "data"),
+    prevent_initial_call=True,
+)
+def toggle_listing_scope(_n_street, _n_town, store):  # noqa: ARG001
+    from dash import ctx
+    if store is None:
+        return no_update
+    trig = ctx.triggered_id
+    scope = "street" if trig == "val-scope-street" else "town"
+    p85 = store.get("p85", 600000)
+    listings = (
+        store.get("current_listings_street", [])
+        if scope == "street" else
+        store.get("current_listings", [])
+    )
+    # Re-render just the cards list (not the full listing_cards wrapper)
+    return (
+        html.Div(className="listings-scroll", children=[
+            _listing_card(lst, p85) for lst in listings
+        ]) if listings else
+        html.P("No current listings found.",
+               style={"padding": "16px", "color": "var(--color-text-muted)",
+                      "fontSize": "13px"})
+    )
+
+
+def _listing_card(lst, p85):
+    signal = (
+        html.Span("\u26a0\ufe0f Above fair value range",
+                  style={"color": "var(--color-danger)", "fontSize": "11px", "fontWeight": "600"})
+        if lst["asking_price"] > p85 else
+        html.Span("\u2713 Within fair value range",
+                  style={"color": "var(--color-success)", "fontSize": "11px", "fontWeight": "600"})
+    )
+    url = lst.get("url")
+    address_el = (
+        html.A(f"Blk {lst['blk']} {lst['street']}", href=url, target="_blank",
+               style={"fontWeight": "700", "fontSize": "14px", "color": "var(--color-primary)",
+                      "textDecoration": "none", "marginBottom": "3px", "display": "block"})
+        if url else
+        html.Div(f"Blk {lst['blk']} {lst['street']}",
+                 style={"fontWeight": "700", "fontSize": "14px",
+                        "color": "var(--color-text-primary)", "marginBottom": "3px"})
+    )
+    return html.Div(className="listing-card", children=[
+        html.Div(className="listing-card-left", children=[
+            html.Div(str(lst["rank"]), className="listing-card-rank-num"),
+        ]),
+        html.Div(className="listing-card-body", children=[
+            address_el,
+            html.Div([
+                html.Span(lst["flat_type"],
+                          style={"fontSize": "12px", "color": "var(--color-text-secondary)"}),
+                html.Span(" \u00b7 ", style={"color": "var(--color-text-muted)"}),
+                html.Span(lst["storey_display"],
+                          style={"fontSize": "12px", "color": "var(--color-text-secondary)"}),
+                html.Span(" \u00b7 ", style={"color": "var(--color-text-muted)"}),
+                html.Span(lst["remaining_lease"],
+                          style={"fontSize": "12px", "color": "var(--color-text-secondary)"}),
+            ]),
+        ]),
+        html.Div(className="listing-card-price", children=[
+            html.Div(f"${lst['asking_price']:,}",
+                     style={"fontFamily": "var(--mono)", "fontWeight": "700", "fontSize": "16px",
+                            "color": "var(--color-text-primary)", "whiteSpace": "nowrap"}),
+            signal,
+        ]),
+    ])
