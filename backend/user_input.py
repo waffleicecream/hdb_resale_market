@@ -381,8 +381,8 @@ def compute_features(
     print(f"  schools:    nearest={dist_nearest_primary_m:.0f} m ({nearest_primary_name}), within 1 km={num_primary_1km}")
 
     # --- Parks (same exclusion rules as the pipeline) ---
-    PARK_EXCLUSION_SUFFIXES = ("PLAYGROUND", "TERMINAL", "NURSERY", "STATELAND", "LINKWAY")
-    PARK_EXCLUSION_CONTAINS = ("CAR PARK",)
+    PARK_EXCLUSION_SUFFIXES = ("PLAYGROUND", "TERMINAL", "NURSERY", "STATELAND", "LINKWAY", " PG")
+    PARK_EXCLUSION_CONTAINS = ("CAR PARK", " PG ")
 
     with open(os.path.join(DATA_DIR, "Parks.geojson")) as f:
         parks_geojson = json.load(f)
