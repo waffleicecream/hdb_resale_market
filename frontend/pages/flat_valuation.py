@@ -1012,13 +1012,14 @@ def valuation_insight(data, listing_price, verdict, p15, p85):
 
 
 # ── Map layer config (palette: no blue — that's reserved for subject flat) ──
+# Maki icon names supported by carto-positron / Mapbox GL
 _LAYER_STYLE = {
-    "mrt":        {"color": "#3D9FA8", "size": 12, "label": "MRT/LRT"},       # teal/turquoise
-    "school":     {"color": "#E8C84A", "size": 10, "label": "School"},         # yellow
-    "mall":       {"color": "#E87DAD", "size": 10, "label": "Mall"},           # pink
-    "healthcare": {"color": "#B48FD4", "size": 10, "label": "Healthcare"},     # purple
-    "hawker":     {"color": "#87C4E0", "size": 10, "label": "Hawker"},         # light blue
-    "park":       {"color": "#6EC97A", "size": 10, "label": "Park"},           # light green
+    "mrt":        {"color": "#3D9FA8", "size": 18, "label": "MRT/LRT",     "symbol": "rail"},
+    "school":     {"color": "#C8A800", "size": 16, "label": "School",      "symbol": "school"},
+    "mall":       {"color": "#D45B8A", "size": 16, "label": "Mall",        "symbol": "shop"},
+    "healthcare": {"color": "#8B5DB0", "size": 16, "label": "Healthcare",  "symbol": "hospital"},
+    "hawker":     {"color": "#4A9EC2", "size": 16, "label": "Hawker",      "symbol": "restaurant"},
+    "park":       {"color": "#4AAF5A", "size": 16, "label": "Park",        "symbol": "park"},
 }
 
 def _nearby_amenity_pts(pts, user_lat, user_lon, radius_m=3000):
@@ -1061,8 +1062,12 @@ def make_listings_map(user_lat, user_lon, user_address, listings,
                 lat=[p["lat"] for p in pts],
                 lon=[p["lon"] for p in pts],
                 mode="markers",
-                marker=go.scattermapbox.Marker(size=style["size"], color=style["color"],
-                                               opacity=0.85),
+                marker=go.scattermapbox.Marker(
+                    size=style["size"],
+                    color=style["color"],
+                    symbol=style["symbol"],
+                    opacity=0.9,
+                ),
                 hovertext=[f"<b>{style['label']}</b><br>{p['name']}" for p in pts],
                 hoverinfo="text",
                 name=style["label"],
@@ -1103,7 +1108,7 @@ def make_listings_map(user_lat, user_lon, user_address, listings,
     # ── Subject flat (always shown) ─────────────────────────────
     fig.add_trace(go.Scattermapbox(
         lat=[user_lat], lon=[user_lon], mode="markers+text",
-        marker=go.scattermapbox.Marker(size=20, color="#1C4ED8"),
+        marker=go.scattermapbox.Marker(size=22, color="#1C4ED8", symbol="marker"),
         text=["Your flat"],
         textposition="bottom center",
         textfont=dict(size=11, color="#1C4ED8"),
