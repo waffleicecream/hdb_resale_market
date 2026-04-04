@@ -2102,3 +2102,26 @@ a { color: inherit; text-decoration: none; }
   flex-shrink: 0;
   text-align: right;
 }
+
+/* ── Scope toggle buttons (listing panel) ───────────────────── */
+.scope-btn {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  border: 1.5px solid var(--color-border);
+  background: white;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.15s;
+  font-family: var(--sans);
+}
+.scope-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+.scope-btn-active {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: white;
+}
