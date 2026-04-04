@@ -143,7 +143,7 @@ _STOREY_MAP = {"Low": "Low", "Medium": "Mid", "High": "High"}
 # ── Amenity pin data loaded once at startup ────────────────────
 def _load_amenity_pins():
     """Load malls, schools, healthcare, MRT, hawker into lists of {lat, lon, name}."""
-    pins = {"mall": [], "school": [], "healthcare": [], "mrt": [], "hawker": []}
+    pins = {"mall": [], "school": [], "healthcare": [], "mrt": [], "hawker": [], "park": []}
 
     # Malls: data/shoppingmalls.csv
     mall_path = os.path.join(_DATA, "shoppingmalls.csv")
@@ -195,6 +195,16 @@ def _load_amenity_pins():
             if isinstance(v, dict) and v.get("lat") and v.get("lon"):
                 pins["hawker"].append({"lat": float(v["lat"]), "lon": float(v["lon"]),
                                         "name": str(name)})
+
+    # Parks: data/park_approx_locs.json — keyed by name, value {lat, lon}
+    park_path = os.path.join(_DATA, "park_approx_locs.json")
+    if os.path.exists(park_path):
+        with open(park_path, encoding="utf-8") as f:
+            pkcache = json.load(f)
+        for name, v in pkcache.items():
+            if isinstance(v, dict) and v.get("lat") and v.get("lon"):
+                pins["park"].append({"lat": float(v["lat"]), "lon": float(v["lon"]),
+                                      "name": str(name).title()})
 
     return pins
 
@@ -998,6 +1008,7 @@ _LAYER_STYLE = {
     "mall":       {"color": "#E87DAD", "size": 10, "label": "Mall"},           # pink
     "healthcare": {"color": "#B48FD4", "size": 10, "label": "Healthcare"},     # purple
     "hawker":     {"color": "#87C4E0", "size": 10, "label": "Hawker"},         # light blue
+    "park":       {"color": "#6EC97A", "size": 10, "label": "Park"},           # light green
 }
 
 def _nearby_amenity_pts(pts, user_lat, user_lon, radius_m=3000):
@@ -1341,8 +1352,9 @@ _MAP_LAYERS = [
     ("mall",       "Malls",            "#D45B8A"),
     ("healthcare", "Healthcare",       "#8B5DB0"),
     ("hawker",     "Hawker Centres",   "#4A9EC2"),
+    ("park",       "Parks",            "#4AAF5A"),
 ]
-_DEFAULT_LAYERS = {"current", "past", "mrt", "school", "mall", "healthcare", "hawker"}
+_DEFAULT_LAYERS = {"current", "past", "mrt", "school", "mall", "healthcare", "hawker", "park"}
 
 
 def layer_toggles(active_layers):
