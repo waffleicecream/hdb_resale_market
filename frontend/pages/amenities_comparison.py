@@ -1,4 +1,5 @@
 import json
+import pandas as pd
 import dash
 from dash import html, dcc, callback, Output, Input, State, no_update, ALL, ctx
 import os
@@ -6,17 +7,134 @@ import os
 dash.register_page(__name__, path="/amenities-comparison", name="Amenities Comparison")
 
 _BASE = os.path.dirname(os.path.dirname(__file__))
+_MERGED = os.path.join(os.path.dirname(_BASE), "merged_data")
 
-# ── Data loading — swap AMENITIES_DATA_PATH env var to use backend output ──
-_DATA_PATH = os.environ.get(
-    "AMENITIES_DATA_PATH",
-    os.path.join(_BASE, "mock_data", "amenities_demo.json"),
-)
-with open(_DATA_PATH, encoding="utf-8") as f:
+# ── Demo data (kept for Load Demo button) ─────────────────────
+with open(os.path.join(_BASE, "mock_data", "amenities_demo.json"), encoding="utf-8") as f:
     DEMO = json.load(f)
 
 FLAT_LABELS = ["Flat A", "Flat B", "Flat C"]
 DEMO_POSTALS = [fd["postal_code"] for fd in DEMO["flats"].values()]
+
+# ── Backend data: load once at startup ────────────────────────
+# Build a block+street → amenity lookup from both enriched datasets
+_WALK_SPEED_MPS = 83  # metres per minute (~5 km/h)
+
+def _load_amenity_lookup():
+    """Return dict keyed by (block_upper, street_upper) → row dict."""
+    frames = []
+    for path in [
+        os.path.join(_MERGED, "[PAST_TRANSACTIONS]hdb_with_amenities_macro.csv"),
+        os.path.join(_MERGED, "hdb_with_amenities_macro_2026.csv"),
+    ]:
+        if os.path.exists(path):
+            df = pd.read_csv(path, low_memory=False)
+            frames.append(df)
+    if not frames:
+        return {}
+    combined = pd.concat(frames, ignore_index=True)
+    # Keep one row per block+street (latest data wins — 2026 appended last)
+    combined = combined.drop_duplicates(subset=["block", "street_name"], keep="last")
+    lookup = {}
+    for _, row in combined.iterrows():
+        key = (str(row["block"]).upper().strip(),
+               str(row["street_name"]).upper().strip())
+        lookup[key] = row.to_dict()
+    return lookup
+
+# postal_code → (block, street) from hdb_2026_enriched
+def _load_postal_lookup():
+    path = os.path.join(os.path.dirname(_BASE), "data", "hdb_2026_enriched.csv")
+    if not os.path.exists(path):
+        return {}
+    df = pd.read_csv(path, usecols=["postal_code", "block", "street", "town"])
+    df["postal_code"] = df["postal_code"].astype(str).str.strip()
+    lookup = {}
+    for _, row in df.iterrows():
+        pc = row["postal_code"]
+        if pc not in lookup:
+            lookup[pc] = {
+                "block": str(row["block"]).upper().strip(),
+                "street": str(row["street"]).upper().strip(),
+                "town": row["town"],
+                "address": f"Blk {row['block']} {row['street']}",
+                "postal_code": pc,
+            }
+    return lookup
+
+_AMENITY_LOOKUP = _load_amenity_lookup()
+_POSTAL_LOOKUP  = _load_postal_lookup()
+
+
+def lookup_flat_by_postal(postal):
+    """
+    Returns (flat_meta, nearest_dict, within_dict) for a postal code,
+    or (None, {}, {}) if not found.
+    flat_meta matches the shape used by the UI builders.
+    nearest_dict keys: mrt_station, shopping_mall, hawker_centre, polyclinic, sports_hall
+    within_dict keys: primary_schools (list of str)
+    """
+    meta = _POSTAL_LOOKUP.get(str(postal).strip())
+    if not meta:
+        return None, {}, {}
+
+    row = _AMENITY_LOOKUP.get((meta["block"], meta["street"]))
+    if row is None:
+        # Return address metadata but no amenity data
+        return meta, {}, {}
+
+    def walk_min(dist_m):
+        return max(1, round(dist_m / _WALK_SPEED_MPS))
+
+    nearest = {}
+
+    mrt_dist = row.get("nearest_train_dist_m")
+    if pd.notna(mrt_dist):
+        nearest["mrt_station"] = {
+            "name": str(row.get("nearest_train_name", "MRT Station")),
+            "distance_m": int(mrt_dist),
+            "walk_min": walk_min(mrt_dist),
+        }
+
+    hawker_dist = row.get("dist_nearest_hawker_m")
+    if pd.notna(hawker_dist):
+        nearest["hawker_centre"] = {
+            "name": str(row.get("nearest_hawker_name", "Hawker Centre")),
+            "distance_m": int(hawker_dist),
+            "walk_min": walk_min(hawker_dist),
+        }
+
+    mall_dist = row.get("dist_nearest_mall_m")
+    if pd.notna(mall_dist):
+        nearest["shopping_mall"] = {
+            "name": str(row.get("nearest_mall_name", "Shopping Mall")),
+            "distance_m": int(mall_dist),
+            "walk_min": walk_min(mall_dist),
+        }
+
+    sports_dist = row.get("dist_nearest_sportsg_m")
+    if pd.notna(sports_dist):
+        nearest["sports_hall"] = {
+            "name": str(row.get("nearest_sportsg_name", "Sports Hall")),
+            "distance_m": int(sports_dist),
+            "walk_min": walk_min(sports_dist),
+        }
+
+    healthcare_dist = row.get("dist_nearest_healthcare_m")
+    if pd.notna(healthcare_dist):
+        nearest["polyclinic"] = {
+            "name": str(row.get("nearest_healthcare_name", "Polyclinic")),
+            "distance_m": int(healthcare_dist),
+            "walk_min": walk_min(healthcare_dist),
+        }
+
+    # Within 1km
+    schools_raw = row.get("primary_schools_1km", "")
+    schools = [s.strip().title() for s in str(schools_raw).split("|") if s.strip() and s.strip().lower() != "nan"]
+
+    within = {"primary_schools": schools}
+
+    return meta, nearest, within
 
 # ── Proximity thresholds (walk minutes) ───────────────────────
 # Format: [exceptional_max, good_max, below_average_max]
@@ -524,21 +642,25 @@ def render_comparison(store):
     ]
 
     flat_data, nearest_data, within_data = {}, {}, {}
-    thresholds = DEMO.get("proximity_thresholds_min", DEFAULT_THRESHOLDS_MIN)
+    thresholds = DEFAULT_THRESHOLDS_MIN
 
     for i, p in enumerate(store):
         label = FLAT_LABELS[i]
-        matched = next(
+
+        # Check demo data first (exact postal match in demo)
+        demo_key = next(
             (fl for fl, fd in DEMO["flats"].items() if fd["postal_code"] == p), None
         )
-        if matched:
-            flat_data[label]    = DEMO["flats"][matched]
-            nearest_data[label] = DEMO["nearest"].get(matched, {})
-            within_data[label]  = DEMO["within_1km"].get(matched, {})
+        if demo_key:
+            flat_data[label]    = DEMO["flats"][demo_key]
+            nearest_data[label] = DEMO["nearest"].get(demo_key, {})
+            within_data[label]  = DEMO["within_1km"].get(demo_key, {})
         else:
-            flat_data[label]    = None
-            nearest_data[label] = {}
-            within_data[label]  = {}
+            # Real backend lookup
+            meta, nearest, within = lookup_flat_by_postal(p)
+            flat_data[label]    = meta
+            nearest_data[label] = nearest
+            within_data[label]  = within
 
     active_labels = [FLAT_LABELS[i] for i in range(len(store))]
     results = build_results(active_labels, flat_data, nearest_data, within_data, thresholds)

@@ -1,13 +1,321 @@
 import json, os
+import pandas as pd
+import numpy as np
 import dash
 from dash import html, dcc, callback, Output, Input, State, no_update
 import plotly.graph_objects as go
 
 dash.register_page(__name__, path="/flat-valuation", name="Flat Valuation")
 
-_BASE = os.path.dirname(os.path.dirname(__file__))
+_BASE    = os.path.dirname(os.path.dirname(__file__))
+_ROOT    = os.path.dirname(_BASE)
+_MERGED  = os.path.join(_ROOT, "merged_data")
+_DATA    = os.path.join(_ROOT, "data")
+_OUTPUTS = os.path.join(_ROOT, "outputs")
+_BACKEND = os.path.join(_ROOT, "backend")
+
 with open(os.path.join(_BASE, "mock_data", "valuation_demo.json"), encoding="utf-8") as f:
     DEMO = json.load(f)
+
+# ── Backend data loaded once at startup ───────────────────────
+
+def _load_df(path, **kwargs):
+    return pd.read_csv(path, low_memory=False, **kwargs) if os.path.exists(path) else pd.DataFrame()
+
+_ENRICHED     = _load_df(os.path.join(_DATA, "hdb_2026_enriched.csv"))
+_STREET_TRENDS = _load_df(os.path.join(_OUTPUTS, "street_trends.csv"))
+_PAST_TXN     = _load_df(os.path.join(_MERGED, "[PAST_TRANSACTIONS]hdb_with_amenities_macro.csv"))
+
+# Normalise street_name to uppercase once
+if not _STREET_TRENDS.empty:
+    _STREET_TRENDS["street_upper"] = _STREET_TRENDS["street_name"].str.upper().str.strip()
+if not _PAST_TXN.empty:
+    _PAST_TXN["street_upper"] = _PAST_TXN["street_name"].str.upper().str.strip()
+
+# UI flat_type ("4-Room") → data flat_type ("4 ROOM")
+_FT_MAP = {
+    "2-Room": "2 ROOM", "3-Room": "3 ROOM", "4-Room": "4 ROOM",
+    "5-Room": "5 ROOM", "Executive": "EXECUTIVE",
+}
+# Storey UI → floor_category
+_STOREY_MAP = {"Low": "Low", "Medium": "Mid", "High": "High"}
+
+# ── OLS model loaded once at startup ──────────────────────────
+_OLS_MODEL  = None
+_OLS_SCALER = None
+_OLS_COLS   = None
+
+try:
+    import joblib
+    import statsmodels.api as _sm
+
+    _MODEL_DIR = os.path.join(_BACKEND, "price_model")
+    if all(os.path.exists(os.path.join(_MODEL_DIR, f))
+           for f in ("ols_model.pkl", "ols_scaler.joblib", "ols_feature_cols.json")):
+        _OLS_MODEL  = _sm.load(os.path.join(_MODEL_DIR, "ols_model.pkl"))
+        _OLS_SCALER = joblib.load(os.path.join(_MODEL_DIR, "ols_scaler.joblib"))
+        with open(os.path.join(_MODEL_DIR, "ols_feature_cols.json")) as _f:
+            _OLS_COLS = json.load(_f)
+except Exception as _e:
+    print(f"[flat_valuation] OLS model not loaded: {_e}")
+
+# Amenity lookup: (block_upper, street_upper) → amenity feature dict
+# Built from pipeline CSVs (2026 wins over pre-2026 on duplicate block+street)
+_OLS_CONTINUOUS = [
+    "remaining_lease_years", "nearest_train_dist_m", "dist_nearest_hawker_m",
+    "dist_nearest_primary_m", "num_primary_1km", "dist_nearest_park_m",
+    "dist_nearest_sportsg_m", "dist_nearest_mall_m", "dist_nearest_healthcare_m",
+    "num_parks_1km",
+]
+
+def _build_amenity_lookup():
+    lookup = {}
+    for path in (
+        os.path.join(_MERGED, "[FINAL]hdb_with_amenities_macro_pre2026.csv"),
+        os.path.join(_MERGED, "[FINAL]hdb_with_amenities_macro_2026.csv"),
+    ):
+        if not os.path.exists(path):
+            continue
+        df = pd.read_csv(path, usecols=["block", "street_name", "town"] + _OLS_CONTINUOUS,
+                         low_memory=False)
+        df["_bk"] = df["block"].astype(str).str.upper().str.strip()
+        df["_st"] = df["street_name"].astype(str).str.upper().str.strip()
+        for _, r in df.drop_duplicates(subset=["_bk", "_st"], keep="last").iterrows():
+            lookup[(r["_bk"], r["_st"])] = r.to_dict()
+    return lookup
+
+_AMENITY_LOOKUP = _build_amenity_lookup()
+
+
+def get_ols_prediction(block, street_upper, town, flat_type_ui, floor_category, remaining_lease_years):
+    """
+    Run OLS model using pre-computed amenity features from pipeline CSVs.
+    Returns (p_low, median, p_high) at 80% PI, or None if unavailable.
+    """
+    if _OLS_MODEL is None or remaining_lease_years is None:
+        return None
+
+    amenity_row = _AMENITY_LOOKUP.get(
+        (str(block).upper().strip(), street_upper)
+    )
+    if amenity_row is None:
+        return None
+
+    ft = _FT_MAP.get(flat_type_ui, flat_type_ui.upper())
+    fc = _STOREY_MAP.get(floor_category, floor_category)
+
+    try:
+        features = {c: amenity_row[c] for c in _OLS_CONTINUOUS}
+        features["remaining_lease_years"] = remaining_lease_years
+
+        cont_vals   = np.array([[features[c] for c in _OLS_CONTINUOUS]])
+        cont_scaled = _OLS_SCALER.transform(cont_vals)
+        cont_df     = pd.DataFrame(cont_scaled, columns=_OLS_CONTINUOUS)
+
+        dummy_cols = [c for c in _OLS_COLS if c not in _OLS_CONTINUOUS]
+        row = {col: 0 for col in dummy_cols}
+        flat_col  = f"flat_type_{ft}"
+        town_col  = f"town_{str(town).upper().strip().replace(' TOWN', '')}"
+        floor_col = f"floor_category_{fc}"
+        if flat_col  in row: row[flat_col]  = 1
+        if town_col  in row: row[town_col]  = 1
+        if floor_col in row: row[floor_col] = 1
+
+        import statsmodels.api as sm
+        X_new       = pd.concat([cont_df, pd.DataFrame([row])], axis=1)[_OLS_COLS]
+        X_new_const = sm.add_constant(X_new, has_constant="add")
+        pred  = _OLS_MODEL.get_prediction(X_new_const)
+        frame = pred.summary_frame(alpha=0.2)  # 80% PI
+        return (
+            int(np.exp(frame["obs_ci_lower"].values[0])),
+            int(np.exp(frame["mean"].values[0])),
+            int(np.exp(frame["obs_ci_upper"].values[0])),
+        )
+    except Exception:
+        return None
+
+
+def _meta_from_postal(postal):
+    """Return first row dict from enriched CSV for this postal, or None."""
+    if _ENRICHED.empty:
+        return None
+    match = _ENRICHED[_ENRICHED["postal_code"].astype(str) == str(postal).strip()]
+    if match.empty:
+        return None
+    return match.iloc[0].to_dict()
+
+
+
+def get_placeholder_prediction(town, flat_type_ui, floor_category):
+    """
+    Placeholder prediction: median resale_price for this town×flat_type×floor_category
+    from PAST_TRANSACTIONS. Returns (p15, median, p85) in SGD, or None if no data.
+    """
+    if _PAST_TXN.empty:
+        return None
+    ft = _FT_MAP.get(flat_type_ui, flat_type_ui.upper())
+    fc = _STOREY_MAP.get(floor_category, floor_category)
+    sub = _PAST_TXN[
+        (_PAST_TXN["town"].str.upper() == str(town).upper()) &
+        (_PAST_TXN["flat_type"] == ft) &
+        (_PAST_TXN["floor_category"] == fc)
+    ]["resale_price"].dropna()
+    if len(sub) < 3:
+        # Widen to town+flat_type only
+        sub = _PAST_TXN[
+            (_PAST_TXN["town"].str.upper() == str(town).upper()) &
+            (_PAST_TXN["flat_type"] == ft)
+        ]["resale_price"].dropna()
+    if sub.empty:
+        return None
+    return (
+        int(np.percentile(sub, 15)),
+        int(np.median(sub)),
+        int(np.percentile(sub, 85)),
+    )
+
+
+def get_street_trends(street_upper, flat_type_ui, floor_category):
+    """Return list of {quarter, avg_price, n_transactions} sorted by quarter."""
+    if _STREET_TRENDS.empty:
+        return []
+    ft = _FT_MAP.get(flat_type_ui, flat_type_ui.upper())
+    fc = _STOREY_MAP.get(floor_category, floor_category)
+    sub = _STREET_TRENDS[
+        (_STREET_TRENDS["street_upper"] == street_upper) &
+        (_STREET_TRENDS["flat_type"] == ft) &
+        (_STREET_TRENDS["floor_category"] == fc)
+    ]
+    if sub.empty:
+        # Fallback: all floor categories on this street+flat_type
+        sub = _STREET_TRENDS[
+            (_STREET_TRENDS["street_upper"] == street_upper) &
+            (_STREET_TRENDS["flat_type"] == ft)
+        ].copy()
+        if not sub.empty:
+            sub = sub.groupby("quarter").agg(
+                avg_price=("avg_price", "mean"),
+                n_transactions=("n_transactions", "sum")
+            ).reset_index()
+            sub["avg_price"] = sub["avg_price"].round(0).astype(int)
+    sub = sub.sort_values("quarter")
+    return [{"quarter": r["quarter"], "avg_price": int(r["avg_price"]),
+             "n_transactions": int(r["n_transactions"])} for _, r in sub.iterrows()]
+
+
+def get_past_transactions(street_upper, flat_type_ui, floor_category, n=10):
+    """Return list of {date, floor, flat_type, price} for the table."""
+    if _PAST_TXN.empty:
+        return []
+    ft = _FT_MAP.get(flat_type_ui, flat_type_ui.upper())
+    fc = _STOREY_MAP.get(floor_category, floor_category)
+    sub = _PAST_TXN[
+        (_PAST_TXN["street_upper"] == street_upper) &
+        (_PAST_TXN["flat_type"] == ft) &
+        (_PAST_TXN["floor_category"] == fc)
+    ].sort_values("month", ascending=False).head(n)
+    if sub.empty:
+        sub = _PAST_TXN[
+            (_PAST_TXN["street_upper"] == street_upper) &
+            (_PAST_TXN["flat_type"] == ft)
+        ].sort_values("month", ascending=False).head(n)
+    return [
+        {"date": r["month"], "floor": r["storey_range"],
+         "flat_type": r["flat_type"], "price": int(r["resale_price"])}
+        for _, r in sub.iterrows()
+    ]
+
+
+def get_current_listings(street_upper, flat_type_ui, floor_category, p15, p85):
+    """
+    Return list of listing dicts for map + cards.
+    Filters: same flat_type, same street, price within [p15, p85] range,
+    same or better lease (floor_category same or better).
+    """
+    if _ENRICHED.empty:
+        return []
+    ft_norm = _FT_MAP.get(flat_type_ui, flat_type_ui.upper())
+    fc = _STOREY_MAP.get(floor_category, floor_category)
+
+    sub = _ENRICHED[
+        (_ENRICHED["street"].str.upper().str.strip() == street_upper) &
+        (_ENRICHED["flat_type_norm"] == ft_norm) &
+        (_ENRICHED["price_numeric"].notna()) &
+        (_ENRICHED["scrape_failed"] == False)
+    ].copy()
+
+    # Filter to fair price range
+    sub = sub[(sub["price_numeric"] >= p15) & (sub["price_numeric"] <= p85)]
+
+    # Sort by price ascending
+    sub = sub.sort_values("price_numeric").head(10)
+
+    listings = []
+    for rank, (_, r) in enumerate(sub.iterrows(), 1):
+        reasons = []
+        if str(r.get("floor_category", "")) == fc:
+            reasons.append("Same storey level")
+        listings.append({
+            "rank": rank,
+            "blk": str(r["block"]),
+            "street": str(r["street"]),
+            "flat_type": str(r["rooms"]),
+            "storey_display": str(r["storey_range"]),
+            "remaining_lease": str(r["remaining_lease"]),
+            "asking_price": int(r["price_numeric"]),
+            "lat": float(r["lat"]) if pd.notna(r.get("lat")) else None,
+            "lon": float(r["lon"]) if pd.notna(r.get("lon")) else None,
+            "listing_active": True,
+            "match_reasons": reasons,
+        })
+    return listings
+
+
+def build_real_data(postal, flat_type_ui, storey_bin, lease_bin):
+    """
+    Build the data dict consumed by valuation_dashboard().
+    Returns None if postal code not found.
+    """
+    meta = _meta_from_postal(postal)
+    if meta is None:
+        return None
+
+    town = str(meta.get("town", "")).replace(" Town", "").strip().upper()
+    street_upper = str(meta["street"]).upper().strip()
+    remaining_lease = str(meta.get("remaining_lease", ""))
+    remaining_lease_years = float(meta["remaining_lease_years"]) if pd.notna(meta.get("remaining_lease_years")) else None
+
+    # Try OLS model first; fall back to historical percentile placeholder
+    prediction = get_ols_prediction(meta["block"], street_upper, town, flat_type_ui, storey_bin, remaining_lease_years)
+    model_note = None
+    if prediction is None:
+        prediction = get_placeholder_prediction(town, flat_type_ui, storey_bin)
+        model_note = "Placeholder: historical percentile. OLS model unavailable for this address."
+    if prediction is None:
+        prediction = (400000, 500000, 600000)  # absolute fallback
+        model_note = "Placeholder: default range. No data available for this address."
+    p15, _, p85 = prediction
+
+    trends = get_street_trends(street_upper, flat_type_ui, storey_bin)
+    txns   = get_past_transactions(street_upper, flat_type_ui, storey_bin)
+    listings = get_current_listings(street_upper, flat_type_ui, storey_bin, p15, p85)
+
+    return {
+        "address": f"Blk {meta['block']} {meta['street'].title()}",
+        "postal_code": str(postal).strip(),
+        "town": town.title(),
+        "lat": float(meta["lat"]) if pd.notna(meta.get("lat")) else 1.3521,
+        "lon": float(meta["lon"]) if pd.notna(meta.get("lon")) else 103.8198,
+        "flat_type": flat_type_ui,
+        "storey_level_bin": storey_bin,
+        "remaining_lease_bin": lease_bin,
+        "remaining_lease": remaining_lease or lease_bin,
+        "projection": {"p15": p15, "p85": p85},
+        "graph_trend": trends,
+        "past_transactions": txns,
+        "current_listings": [l for l in listings if l["lat"] is not None],
+        "_model_note": model_note,
+    }
 
 FLAT_TYPES = ["2-Room", "3-Room", "4-Room", "5-Room", "Executive"]
 STOREY_BINS = [
@@ -459,6 +767,14 @@ def top_left_panel(data, listing_price=None):
         # Market premium bar
         market_premium_bar(listing_price, p15, p85),
 
+        # Placeholder model notice (shown when not demo data)
+        html.Div(
+            "⚠ Price range based on historical percentiles. "
+            "Full Random Forest model coming soon.",
+            style={"fontSize": "11px", "color": "var(--color-text-muted)",
+                   "fontStyle": "italic", "marginTop": "8px"}
+        ) if data.get("_model_note") else None,
+
         html.Div(className="divider", style={"margin": "16px 0"}),
 
         # Lease warning
@@ -493,11 +809,12 @@ def top_right_panel(data, listing_price=None):
     p85 = data["projection"]["p85"]
     return html.Div(className="val-top-right card", children=[
         html.Div([
-            html.P("HISTORICAL PRICE REFERENCE", className="val-panel-label"),
+            html.H3("Historical Price Trends",
+                    style={"fontSize": "16px", "fontWeight": "700",
+                           "color": "var(--color-text-primary)", "margin": "0 0 4px 0"}),
             html.P("Same street \u00b7 same storey bin \u00b7 same flat type",
                    style={"fontSize": "12px", "color": "var(--color-text-secondary)",
-                          "fontStyle": "italic", "marginTop": "2px",
-                          "marginBottom": "0"}),
+                          "margin": "0"}),
         ], style={"marginBottom": "16px"}),
 
         # Chart on top
@@ -516,9 +833,11 @@ def top_right_panel(data, listing_price=None):
         ),
 
         # Past transactions table below (scrollable)
-        html.P("PAST TRANSACTIONS", className="val-panel-label",
-               style={"paddingTop": "8px",
-                      "borderTop": "1px solid var(--color-border)"}),
+        html.H3("Past Transactions",
+                style={"fontSize": "15px", "fontWeight": "700",
+                       "color": "var(--color-text-primary)",
+                       "paddingTop": "12px", "marginBottom": "8px",
+                       "borderTop": "1px solid var(--color-border)"}),
         past_data_table(data),
     ])
 
@@ -668,7 +987,7 @@ layout = html.Div(className="page-wrapper", id="val-page-root", children=[
     State("val-listed", "value"),
     prevent_initial_call=True,
 )
-def run_valuation(_n_submit, _n_demo, postal, flat_type, storey_bin, lease_bin, listed):
+def run_valuation(n_submit, n_demo, postal, flat_type, storey_bin, lease_bin, listed):  # noqa: ARG001
     from dash import ctx
     trig = ctx.triggered_id
 
@@ -685,7 +1004,10 @@ def run_valuation(_n_submit, _n_demo, postal, flat_type, storey_bin, lease_bin, 
         return no_update, "Please select a remaining lease range."
 
     listed_int = int(listed) if listed else None
-    return valuation_dashboard(DEMO, listing_price=listed_int), ""
+    data = build_real_data(postal.strip(), flat_type, storey_bin, lease_bin)
+    if data is None:
+        return no_update, "Postal code not found in our database. Try the demo instead."
+    return valuation_dashboard(data, listing_price=listed_int), ""
 
 
 @callback(
