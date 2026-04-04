@@ -44,3 +44,9 @@ python-dotenv
 
 shapely
 
+statsmodels>=0.14.6
+
+joblib
+
+scikit-learn>=1.8.0
+
