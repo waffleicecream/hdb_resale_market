@@ -9,10 +9,14 @@ Given a postal code, flat type, floor category, and remaining lease, this script
      as the batch pipeline (backend/data_pipeline/3_amenities_pipeline.ipynb)
   5. Prints the complete feature row ready for model inference
 
-Usage:
+Usage (standalone):
     python backend/user_input.py
 
-Edit the USER INPUTS section below before running.
+Usage (as module):
+    from user_input import compute_features
+    result = compute_features("520123", "4 ROOM", "Mid", "61 years 4 months")
+
+Edit the USER INPUTS section inside `if __name__ == '__main__':` before running standalone.
 
 NOTE: Postal codes must be present in data/geocode_cache.json (populated by
 2_train_pipeline.ipynb). Only HDB blocks that have been processed by the
@@ -61,17 +65,6 @@ import re
 
 import numpy as np
 import pandas as pd
-
-# =============================================================================
-# USER INPUTS — edit these before running
-# =============================================================================
-POSTAL_CODE     = "520123"               # 6-digit Singapore postal code
-FLAT_TYPE       = "4 ROOM"               # 2 ROOM | 3 ROOM | 4 ROOM | 5 ROOM | EXECUTIVE
-FLOOR_CATEGORY  = "Mid"                  # Low (floors 1–5) | Mid (6–12) | High (13+)
-REMAINING_LEASE = "61 years 4 months"    # e.g. "61 years" or "61 years 4 months"
-# Town is auto-detected from the postal code. Override here only if the
-# detected value is wrong (e.g. address is near a planning area boundary):
-TOWN_OVERRIDE   = None                   # e.g. "TAMPINES" — set to None to auto-detect
 
 # =============================================================================
 # PATHS
@@ -257,288 +250,282 @@ def load_station_data() -> pd.DataFrame:
 
 
 # =============================================================================
-# STEP 1 — Geocode postal code via cache
+# MAIN FEATURE COMPUTATION
 # =============================================================================
-print(f"Step 1: Looking up postal code {POSTAL_CODE} in geocode cache...")
-lat, lon = geocode_from_cache(POSTAL_CODE, GEOCODE_CACHE_PATH)
-print(f"  lat={lat:.6f}, lon={lon:.6f}")
 
-# Detect HDB town from coordinates
-print("  Detecting HDB town from coordinates...")
-detected_town = lookup_hdb_town(lon, lat)
-if TOWN_OVERRIDE:
-    town = TOWN_OVERRIDE.upper()
-    print(f"  town: {town} (manually overridden; auto-detected: {detected_town})")
-elif detected_town:
-    town = detected_town
-    print(f"  town: {town} (auto-detected)")
-else:
-    raise SystemExit(
-        f"Could not map postal code {POSTAL_CODE} to an HDB town. "
-        "Set TOWN_OVERRIDE manually (e.g. TOWN_OVERRIDE = 'TAMPINES')."
+def compute_features(
+    postal_code: str,
+    flat_type: str,
+    floor_category: str,
+    remaining_lease: str,
+    town_override: str | None = None,
+) -> dict:
+    """
+    Compute all OLS model features for a single HDB unit.
+
+    Parameters
+    ----------
+    postal_code : str
+        6-digit Singapore postal code. Must be present in geocode_cache.json.
+    flat_type : str
+        One of: '2 ROOM', '3 ROOM', '4 ROOM', '5 ROOM', 'EXECUTIVE', 'MULTI-GENERATION'
+    floor_category : str
+        'Low' (floors 1–5), 'Mid' (6–12), or 'High' (13+)
+    remaining_lease : str
+        e.g. '61 years 4 months' or '61 years'
+    town_override : str or None
+        Optional manual town override (e.g. 'TAMPINES'). Set to None to auto-detect.
+
+    Returns
+    -------
+    dict
+        Combined dict of model features (continuous + categorical) and
+        informational fields (nearest amenity names, etc.).
+    """
+    if floor_category not in ("Low", "Mid", "High"):
+        raise ValueError(f"floor_category must be 'Low', 'Mid', or 'High' — got {floor_category!r}")
+
+    # -------------------------------------------------------------------------
+    # STEP 1 — Geocode postal code via cache
+    # -------------------------------------------------------------------------
+    print(f"Step 1: Looking up postal code {postal_code} in geocode cache...")
+    lat, lon = geocode_from_cache(postal_code, GEOCODE_CACHE_PATH)
+    print(f"  lat={lat:.6f}, lon={lon:.6f}")
+
+    print("  Detecting HDB town from coordinates...")
+    detected_town = lookup_hdb_town(lon, lat)
+    if town_override:
+        town = town_override.upper()
+        print(f"  town: {town} (manually overridden; auto-detected: {detected_town})")
+    elif detected_town:
+        town = detected_town
+        print(f"  town: {town} (auto-detected)")
+    else:
+        raise SystemExit(
+            f"Could not map postal code {postal_code} to an HDB town. "
+            "Set town_override manually (e.g. town_override='TAMPINES')."
+        )
+
+    # -------------------------------------------------------------------------
+    # STEP 2 — Nearest train station via static GeoJSON
+    # -------------------------------------------------------------------------
+    PUBLIC_RAIL_PREFIXES = (
+        "NS", "EW", "CC", "DT", "NE", "TE", "CG", "CE", "JS", "JW",
+        "BP", "SW", "SE", "PE", "PW",
     )
 
+    print("Step 2: Finding nearest train station from static data...")
+    stations = load_station_data()
 
-# =============================================================================
-# STEP 2 — Nearest train station via static GeoJSON
-# =============================================================================
-PUBLIC_RAIL_PREFIXES = (
-    "NS", "EW", "CC", "DT", "NE", "TE", "CG", "CE", "JS", "JW",
-    "BP", "SW", "SE", "PE", "PW",
-)
+    public_mask = stations["line_prefix"].isin(PUBLIC_RAIL_PREFIXES)
+    public_stations = stations[public_mask].reset_index(drop=True)
 
-print("Step 2: Finding nearest train station from static data...")
-stations = load_station_data()
+    if public_stations.empty:
+        raise SystemExit("No public rail stations found in MasterPlan2025RailStationLayer.geojson.")
 
-# Filter to public rail only (exclude any non-rail features with unknown codes)
-public_mask = stations["line_prefix"].isin(PUBLIC_RAIL_PREFIXES)
-public_stations = stations[public_mask].reset_index(drop=True)
+    dists = haversine_m(lat, lon, public_stations["lat"].values, public_stations["lon"].values)
+    best_idx             = int(np.argmin(dists))
+    nearest_train_dist_m = float(dists[best_idx])
+    nearest_train_name   = public_stations.iloc[best_idx]["name"]
+    nearest_train_line   = public_stations.iloc[best_idx]["line_prefix"]
 
-if public_stations.empty:
-    raise SystemExit("No public rail stations found in MasterPlan2025RailStationLayer.geojson.")
+    print(f"  {nearest_train_name} ({nearest_train_line}) — {nearest_train_dist_m:.0f} m")
 
-dists = haversine_m(lat, lon, public_stations["lat"].values, public_stations["lon"].values)
-best_idx             = int(np.argmin(dists))
-nearest_train_dist_m = float(dists[best_idx])
-nearest_train_name   = public_stations.iloc[best_idx]["name"]
-nearest_train_line   = public_stations.iloc[best_idx]["line_prefix"]
+    # -------------------------------------------------------------------------
+    # STEP 3 — Amenity features (mirrors 3_amenities_pipeline.ipynb logic)
+    # All distances in metres. Transaction is assumed to be in 2026, so all
+    # hawker centres are treated as open (no date-based filtering needed).
+    # -------------------------------------------------------------------------
+    print("Step 3: Computing amenity features...")
 
-print(f"  {nearest_train_name} ({nearest_train_line}) — {nearest_train_dist_m:.0f} m")
+    # --- Hawker centres ---
+    with open(os.path.join(DATA_DIR, "HawkerCentresGEOJSON.geojson")) as f:
+        hawker_geojson = json.load(f)
 
+    hawker_rows = []
+    for feat in hawker_geojson["features"]:
+        h_lon, h_lat = feat["geometry"]["coordinates"][:2]
+        hawker_rows.append({"name": feat["properties"]["NAME"], "lat": h_lat, "lon": h_lon})
+    hawkers = pd.DataFrame(hawker_rows)
 
-# =============================================================================
-# STEP 3 — Amenity features (mirrors 3_amenities_pipeline.ipynb logic)
-# All distances in metres. Transaction is assumed to be in 2026, so all
-# hawker centres are treated as open (no date-based filtering needed).
-# =============================================================================
-print("Step 3: Computing amenity features...")
+    hawker_dists          = haversine_m(lat, lon, hawkers["lat"].values, hawkers["lon"].values)
+    nearest_hawker_idx    = int(np.argmin(hawker_dists))
+    dist_nearest_hawker_m = float(hawker_dists[nearest_hawker_idx])
+    nearest_hawker_name   = hawkers.iloc[nearest_hawker_idx]["name"]
 
+    print(f"  hawker:     {nearest_hawker_name} — {dist_nearest_hawker_m:.0f} m")
 
-# --- Hawker centres ---
-with open(os.path.join(DATA_DIR, "HawkerCentresGEOJSON.geojson")) as f:
-    hawker_geojson = json.load(f)
+    # --- CBD distance (Raffles Place MRT — informational only, not a model feature) ---
+    CBD_LAT, CBD_LON = 1.2830, 103.8513
+    dist_cbd_m = float(haversine_m(lat, lon, np.array([CBD_LAT]), np.array([CBD_LON]))[0])
 
-hawker_rows = []
-for feat in hawker_geojson["features"]:
-    h_lon, h_lat = feat["geometry"]["coordinates"][:2]
-    hawker_rows.append({"name": feat["properties"]["NAME"], "lat": h_lat, "lon": h_lon})
-hawkers = pd.DataFrame(hawker_rows)
+    # --- Primary schools ---
+    with open(os.path.join(DATA_DIR, "school_geocode_cache.json")) as f:
+        school_cache = json.load(f)
 
-hawker_dists          = haversine_m(lat, lon, hawkers["lat"].values, hawkers["lon"].values)
-nearest_hawker_idx    = int(np.argmin(hawker_dists))
-dist_nearest_hawker_m = float(hawker_dists[nearest_hawker_idx])
-nearest_hawker_name   = hawkers.iloc[nearest_hawker_idx]["name"]
+    _schools_df = pd.read_csv(os.path.join(DATA_DIR, "Generalinformationofschools.csv"))
+    _schools_df = _schools_df[_schools_df["mainlevel_code"] == "PRIMARY"]
+    _school_postal_to_name = dict(
+        zip(_schools_df["postal_code"].astype(str), _schools_df["school_name"])
+    )
+    school_names = [_school_postal_to_name.get(k, k) for k in school_cache.keys()]
+    school_lats  = np.array([v["lat"] for v in school_cache.values()])
+    school_lons  = np.array([v["lon"] for v in school_cache.values()])
+    school_dists            = haversine_m(lat, lon, school_lats, school_lons)
+    nearest_school_idx      = int(np.argmin(school_dists))
+    dist_nearest_primary_m  = float(school_dists[nearest_school_idx])
+    nearest_primary_name    = school_names[nearest_school_idx]
+    num_primary_1km         = int(np.sum(school_dists <= 1000))
+    primary_schools_1km     = "|".join(school_names[i] for i in np.where(school_dists <= 1000)[0])
 
-print(f"  hawker:     {nearest_hawker_name} — {dist_nearest_hawker_m:.0f} m")
+    print(f"  schools:    nearest={dist_nearest_primary_m:.0f} m ({nearest_primary_name}), within 1 km={num_primary_1km}")
 
+    # --- Parks (same exclusion rules as the pipeline) ---
+    PARK_EXCLUSION_SUFFIXES = ("PLAYGROUND", "TERMINAL", "NURSERY", "STATELAND", "LINKWAY")
+    PARK_EXCLUSION_CONTAINS = ("CAR PARK",)
 
-# --- CBD distance (Raffles Place MRT — informational only, not a model feature) ---
-CBD_LAT, CBD_LON = 1.2830, 103.8513
-dist_cbd_m = float(haversine_m(lat, lon, np.array([CBD_LAT]), np.array([CBD_LON]))[0])
+    with open(os.path.join(DATA_DIR, "Parks.geojson")) as f:
+        parks_geojson = json.load(f)
 
+    park_rows = []
+    for feat in parks_geojson["features"]:
+        name = feat["properties"].get("NAME", "")
+        if any(name.endswith(s) for s in PARK_EXCLUSION_SUFFIXES):
+            continue
+        if any(s in name for s in PARK_EXCLUSION_CONTAINS):
+            continue
+        p_lon, p_lat = feat["geometry"]["coordinates"][:2]
+        park_rows.append({"name": name, "lat": p_lat, "lon": p_lon})
+    parks = pd.DataFrame(park_rows)
 
-# --- Primary schools ---
-with open(os.path.join(DATA_DIR, "school_geocode_cache.json")) as f:
-    school_cache = json.load(f)
+    park_dists          = haversine_m(lat, lon, parks["lat"].values, parks["lon"].values)
+    nearest_park_idx    = int(np.argmin(park_dists))
+    dist_nearest_park_m = float(park_dists[nearest_park_idx])
+    nearest_park_name   = parks.iloc[nearest_park_idx]["name"]
+    num_parks_1km       = int(np.sum(park_dists <= 1000))
+    parks_1km           = "|".join(parks.iloc[i]["name"] for i in np.where(park_dists <= 1000)[0])
 
-_schools_df = pd.read_csv(os.path.join(DATA_DIR, "Generalinformationofschools.csv"))
-_schools_df = _schools_df[_schools_df["mainlevel_code"] == "PRIMARY"]
-_school_postal_to_name = dict(
-    zip(_schools_df["postal_code"].astype(str), _schools_df["school_name"])
-)
-school_names = [_school_postal_to_name.get(k, k) for k in school_cache.keys()]
-school_lats  = np.array([v["lat"] for v in school_cache.values()])
-school_lons  = np.array([v["lon"] for v in school_cache.values()])
-school_dists            = haversine_m(lat, lon, school_lats, school_lons)
-nearest_school_idx      = int(np.argmin(school_dists))
-dist_nearest_primary_m  = float(school_dists[nearest_school_idx])
-nearest_primary_name    = school_names[nearest_school_idx]
-num_primary_1km         = int(np.sum(school_dists <= 1000))
-primary_schools_1km     = "|".join(school_names[i] for i in np.where(school_dists <= 1000)[0])
+    print(f"  parks:      nearest={dist_nearest_park_m:.0f} m ({nearest_park_name}), within 1 km={num_parks_1km}")
 
-print(f"  schools:    nearest={dist_nearest_primary_m:.0f} m ({nearest_primary_name}), within 1 km={num_primary_1km}")
+    # --- SportSG facilities ---
+    with open(os.path.join(DATA_DIR, "SportSGSportFacilitiesGEOJSON.geojson")) as f:
+        sport_geojson = json.load(f)
 
+    sport_rows = []
+    for feat in sport_geojson["features"]:
+        s_lon, s_lat = feat["geometry"]["coordinates"][:2]
+        sport_rows.append({"venue": feat["properties"].get("VENUE", ""), "lat": s_lat, "lon": s_lon})
+    sports = pd.DataFrame(sport_rows)
 
-# --- Parks (same exclusion rules as the pipeline) ---
-PARK_EXCLUSION_SUFFIXES = ("PLAYGROUND", "TERMINAL", "NURSERY", "STATELAND", "LINKWAY")
-PARK_EXCLUSION_CONTAINS = ("CAR PARK",)
+    sport_dists            = haversine_m(lat, lon, sports["lat"].values, sports["lon"].values)
+    nearest_sport_idx      = int(np.argmin(sport_dists))
+    dist_nearest_sportsg_m = float(sport_dists[nearest_sport_idx])
+    nearest_sportsg_name   = sports.iloc[nearest_sport_idx]["venue"]
 
-with open(os.path.join(DATA_DIR, "Parks.geojson")) as f:
-    parks_geojson = json.load(f)
+    print(f"  sport:      {nearest_sportsg_name} — {dist_nearest_sportsg_m:.0f} m")
 
-park_rows = []
-for feat in parks_geojson["features"]:
-    name = feat["properties"].get("NAME", "")
-    if any(name.endswith(s) for s in PARK_EXCLUSION_SUFFIXES):
-        continue
-    if any(s in name for s in PARK_EXCLUSION_CONTAINS):
-        continue
-    p_lon, p_lat = feat["geometry"]["coordinates"][:2]
-    park_rows.append({"name": name, "lat": p_lat, "lon": p_lon})
-parks = pd.DataFrame(park_rows)
+    # --- Shopping malls ---
+    malls_raw = pd.read_csv(os.path.join(DATA_DIR, "shoppingmalls.csv"))
+    malls = malls_raw.groupby("name", as_index=False).agg(lat=("lat", "mean"), lon=("lon", "mean"))
 
-park_dists          = haversine_m(lat, lon, parks["lat"].values, parks["lon"].values)
-nearest_park_idx    = int(np.argmin(park_dists))
-dist_nearest_park_m = float(park_dists[nearest_park_idx])
-nearest_park_name   = parks.iloc[nearest_park_idx]["name"]
-num_parks_1km       = int(np.sum(park_dists <= 1000))
-parks_1km           = "|".join(parks.iloc[i]["name"] for i in np.where(park_dists <= 1000)[0])
+    mall_dists          = haversine_m(lat, lon, malls["lat"].values, malls["lon"].values)
+    nearest_mall_idx    = int(np.argmin(mall_dists))
+    dist_nearest_mall_m = float(mall_dists[nearest_mall_idx])
+    nearest_mall_name   = malls.iloc[nearest_mall_idx]["name"]
 
-print(f"  parks:      nearest={dist_nearest_park_m:.0f} m ({nearest_park_name}), within 1 km={num_parks_1km}")
+    print(f"  mall:       {nearest_mall_name} — {dist_nearest_mall_m:.0f} m")
 
+    # --- Healthcare (polyclinics + hospitals) ---
+    with open(os.path.join(DATA_DIR, "healthcare_geocode_cache.json")) as f:
+        hc_cache = json.load(f)
 
-# --- SportSG facilities ---
-with open(os.path.join(DATA_DIR, "SportSGSportFacilitiesGEOJSON.geojson")) as f:
-    sport_geojson = json.load(f)
+    _hc_df = pd.read_csv(os.path.join(DATA_DIR, "healthcare_address.csv"))
+    _hc_postal_to_name = dict(zip(_hc_df["postal_code"].astype(str), _hc_df["institution"]))
+    hc_names = [_hc_postal_to_name.get(k, k) for k in hc_cache.keys()]
+    hc_lats  = np.array([v["lat"] for v in hc_cache.values()])
+    hc_lons  = np.array([v["lon"] for v in hc_cache.values()])
+    hc_dists                  = haversine_m(lat, lon, hc_lats, hc_lons)
+    nearest_hc_idx            = int(np.argmin(hc_dists))
+    dist_nearest_healthcare_m = float(hc_dists[nearest_hc_idx])
+    nearest_healthcare_name   = hc_names[nearest_hc_idx]
 
-sport_rows = []
-for feat in sport_geojson["features"]:
-    s_lon, s_lat = feat["geometry"]["coordinates"][:2]
-    sport_rows.append({"venue": feat["properties"].get("VENUE", ""), "lat": s_lat, "lon": s_lon})
-sports = pd.DataFrame(sport_rows)
+    print(f"  healthcare: nearest={dist_nearest_healthcare_m:.0f} m ({nearest_healthcare_name})")
 
-sport_dists            = haversine_m(lat, lon, sports["lat"].values, sports["lon"].values)
-nearest_sport_idx      = int(np.argmin(sport_dists))
-dist_nearest_sportsg_m = float(sport_dists[nearest_sport_idx])
-nearest_sportsg_name   = sports.iloc[nearest_sport_idx]["venue"]
+    # -------------------------------------------------------------------------
+    # STEP 4 — Derived features
+    # -------------------------------------------------------------------------
+    remaining_lease_years = parse_remaining_lease(remaining_lease)
 
-print(f"  sport:      {nearest_sportsg_name} — {dist_nearest_sportsg_m:.0f} m")
+    # -------------------------------------------------------------------------
+    # STEP 5 — Assemble and return feature dict
+    # -------------------------------------------------------------------------
+    features = {
+        # Continuous features (model inputs)
+        "remaining_lease_years":     remaining_lease_years,
+        "nearest_train_dist_m":      round(nearest_train_dist_m, 1),
+        "dist_nearest_hawker_m":     round(dist_nearest_hawker_m, 1),
+        "dist_nearest_primary_m":    round(dist_nearest_primary_m, 1),
+        "num_primary_1km":           num_primary_1km,
+        "dist_nearest_park_m":       round(dist_nearest_park_m, 1),
+        "num_parks_1km":             num_parks_1km,
+        "dist_nearest_sportsg_m":    round(dist_nearest_sportsg_m, 1),
+        "dist_nearest_mall_m":       round(dist_nearest_mall_m, 1),
+        "dist_nearest_healthcare_m": round(dist_nearest_healthcare_m, 1),
+        # Categorical features (encoded at prediction time)
+        "flat_type":                 flat_type,
+        "town":                      town,
+        "floor_category":            floor_category,
+    }
 
+    info = {
+        "dist_cbd_m":              round(dist_cbd_m, 1),
+        "nearest_train_name":      nearest_train_name,
+        "nearest_train_line":      nearest_train_line,
+        "nearest_hawker_name":     nearest_hawker_name,
+        "nearest_primary_name":    nearest_primary_name,
+        "primary_schools_1km":     primary_schools_1km,
+        "nearest_park_name":       nearest_park_name,
+        "parks_1km":               parks_1km,
+        "nearest_mall_name":       nearest_mall_name,
+        "nearest_sportsg_name":    nearest_sportsg_name,
+        "nearest_healthcare_name": nearest_healthcare_name,
+    }
 
-# --- Shopping malls ---
-malls_raw = pd.read_csv(os.path.join(DATA_DIR, "shoppingmalls.csv"))
-malls = malls_raw.groupby("name", as_index=False).agg(lat=("lat", "mean"), lon=("lon", "mean"))
-
-mall_dists          = haversine_m(lat, lon, malls["lat"].values, malls["lon"].values)
-nearest_mall_idx    = int(np.argmin(mall_dists))
-dist_nearest_mall_m = float(mall_dists[nearest_mall_idx])
-nearest_mall_name   = malls.iloc[nearest_mall_idx]["name"]
-
-print(f"  mall:       {nearest_mall_name} — {dist_nearest_mall_m:.0f} m")
-
-
-# --- Healthcare (polyclinics + hospitals) ---
-with open(os.path.join(DATA_DIR, "healthcare_geocode_cache.json")) as f:
-    hc_cache = json.load(f)
-
-_hc_df = pd.read_csv(os.path.join(DATA_DIR, "healthcare_address.csv"))
-_hc_postal_to_name = dict(zip(_hc_df["postal_code"].astype(str), _hc_df["institution"]))
-hc_names = [_hc_postal_to_name.get(k, k) for k in hc_cache.keys()]
-hc_lats  = np.array([v["lat"] for v in hc_cache.values()])
-hc_lons  = np.array([v["lon"] for v in hc_cache.values()])
-hc_dists                  = haversine_m(lat, lon, hc_lats, hc_lons)
-nearest_hc_idx            = int(np.argmin(hc_dists))
-dist_nearest_healthcare_m = float(hc_dists[nearest_hc_idx])
-nearest_healthcare_name   = hc_names[nearest_hc_idx]
-
-print(f"  healthcare: nearest={dist_nearest_healthcare_m:.0f} m ({nearest_healthcare_name})")
-
-
-# =============================================================================
-# STEP 4 — Derived features
-# =============================================================================
-if FLOOR_CATEGORY not in ("Low", "Mid", "High"):
-    raise ValueError(f"FLOOR_CATEGORY must be 'Low', 'Mid', or 'High' — got {FLOOR_CATEGORY!r}")
-floor_category        = FLOOR_CATEGORY
-remaining_lease_years = parse_remaining_lease(REMAINING_LEASE)
-
-
-# =============================================================================
-# STEP 5 — Assembled feature row
-# =============================================================================
-features = {
-    # Continuous features (model inputs)
-    "remaining_lease_years":     remaining_lease_years,
-    "nearest_train_dist_m":      round(nearest_train_dist_m, 1),
-    "dist_nearest_hawker_m":     round(dist_nearest_hawker_m, 1),
-    "dist_nearest_primary_m":    round(dist_nearest_primary_m, 1),
-    "num_primary_1km":           num_primary_1km,
-    "dist_nearest_park_m":       round(dist_nearest_park_m, 1),
-    "num_parks_1km":             num_parks_1km,
-    "dist_nearest_sportsg_m":    round(dist_nearest_sportsg_m, 1),
-    "dist_nearest_mall_m":       round(dist_nearest_mall_m, 1),
-    "dist_nearest_healthcare_m": round(dist_nearest_healthcare_m, 1),
-    # Categorical features (encoded at prediction time)
-    "flat_type":                 FLAT_TYPE,
-    "town":                      town,
-    "floor_category":            floor_category,
-}
-
-info = {
-    "dist_cbd_m":              round(dist_cbd_m, 1),
-    "nearest_train_name":      nearest_train_name,
-    "nearest_train_line":      nearest_train_line,
-    "nearest_hawker_name":     nearest_hawker_name,
-    "nearest_primary_name":    nearest_primary_name,
-    "primary_schools_1km":     primary_schools_1km,
-    "nearest_park_name":       nearest_park_name,
-    "parks_1km":               parks_1km,
-    "nearest_mall_name":       nearest_mall_name,
-    "nearest_sportsg_name":    nearest_sportsg_name,
-    "nearest_healthcare_name": nearest_healthcare_name,
-}
-
-df = pd.DataFrame([{**features, **info}])
-
-print("\n" + "=" * 60)
-print("FEATURE ROW")
-print("=" * 60)
-for k, v in features.items():
-    print(f"  {k:<30} {v}")
-
-print("\n  --- informational (not model features) ---")
-for k, v in info.items():
-    print(f"  {k:<30} {v}")
+    return {**features, **info}
 
 
 # =============================================================================
-# MODEL PREDICTION (Random Forest) — uncomment to use
+# USER INPUTS — edit these before running
 # =============================================================================
-# PREREQUISITE: First serialize the trained model from random_forest_modelling.ipynb:
-#   import joblib
-#   joblib.dump(rf_model, 'backend/price_model/random_forest_model.joblib')
-#
-# The TRAIN_COLUMNS list must exactly match X_train.columns from the notebook.
-# To verify, run: list(X_train.columns)  in the notebook after fitting.
-#
-# import joblib
-#
-# CONTINUOUS_FEATURES = [
-#     "remaining_lease_years", "nearest_train_dist_m",
-#     "dist_nearest_hawker_m", "dist_nearest_primary_m", "num_primary_1km",
-#     "dist_nearest_park_m", "dist_nearest_sportsg_m",
-#     "dist_nearest_mall_m", "dist_nearest_healthcare_m",
-# ]
-# FLAT_TYPES = ["2 ROOM", "3 ROOM", "4 ROOM", "5 ROOM", "EXECUTIVE"]
-# TOWNS = [
-#     "ANG MO KIO", "BEDOK", "BISHAN", "BUKIT BATOK", "BUKIT MERAH",
-#     "BUKIT PANJANG", "BUKIT TIMAH", "CENTRAL AREA", "CHOA CHU KANG",
-#     "CLEMENTI", "GEYLANG", "HOUGANG", "JURONG EAST", "JURONG WEST",
-#     "KALLANG/WHAMPOA", "MARINE PARADE", "PASIR RIS", "PUNGGOL",
-#     "QUEENSTOWN", "SEMBAWANG", "SENGKANG", "SERANGOON", "TAMPINES",
-#     "TOA PAYOH", "WOODLANDS", "YISHUN",
-# ]
-# FLOOR_CATS = ["High", "Low", "Mid"]
-# TRAIN_COLUMNS = (
-#     CONTINUOUS_FEATURES
-#     + [f"flat_type_{ft}" for ft in FLAT_TYPES]
-#     + [f"town_{t}" for t in TOWNS]
-#     + [f"floor_category_{fc}" for fc in FLOOR_CATS]
-# )
-#
-# rf_model = joblib.load(
-#     os.path.join(BASE_DIR, "backend", "price_model", "random_forest_model.joblib")
-# )
-#
-# # Build a one-row DataFrame with all OHE columns zeroed, then set the active ones
-# row = {col: 0 for col in TRAIN_COLUMNS}
-# for feat in CONTINUOUS_FEATURES:
-#     row[feat] = features[feat]
-# row[f"flat_type_{features['flat_type']}"]             = 1
-# row[f"town_{features['town']}"]                       = 1
-# row[f"floor_category_{features['floor_category']}"]   = 1
-#
-# X_input = pd.DataFrame([row])[TRAIN_COLUMNS]
-# y_log   = rf_model.predict(X_input)
-# predicted_price = np.exp(y_log[0])
-# print(f"\nPredicted resale price (2025 SGD): ${predicted_price:,.0f}")
+POSTAL_CODE     = "520123"               # 6-digit Singapore postal code
+FLAT_TYPE       = "4 ROOM"               # 2 ROOM | 3 ROOM | 4 ROOM | 5 ROOM | EXECUTIVE
+FLOOR_CATEGORY  = "Mid"                  # Low (floors 1–5) | Mid (6–12) | High (13+)
+REMAINING_LEASE = "61 years 4 months"    # e.g. "61 years" or "61 years 04 months"
+# Town is auto-detected from the postal code. Override here only if the
+# detected value is wrong (e.g. address is near a planning area boundary):
+TOWN_OVERRIDE   = None                   # e.g. "TAMPINES" — set to None to auto-detect
+
+
+# =============================================================================
+# STANDALONE ENTRY POINT
+# =============================================================================
+if __name__ == "__main__":
+    result = compute_features(POSTAL_CODE, FLAT_TYPE, FLOOR_CATEGORY, REMAINING_LEASE, TOWN_OVERRIDE)
+
+    MODEL_KEYS = {
+        "remaining_lease_years", "nearest_train_dist_m", "dist_nearest_hawker_m",
+        "dist_nearest_primary_m", "num_primary_1km", "dist_nearest_park_m",
+        "num_parks_1km", "dist_nearest_sportsg_m", "dist_nearest_mall_m",
+        "dist_nearest_healthcare_m", "flat_type", "town", "floor_category",
+    }
+    INFO_KEYS = set(result.keys()) - MODEL_KEYS
+
+    print("\n" + "=" * 60)
+    print("FEATURE ROW")
+    print("=" * 60)
+    for k in MODEL_KEYS:
+        print(f"  {k:<30} {result[k]}")
+
+    print("\n  --- informational (not model features) ---")
+    for k in INFO_KEYS:
+        print(f"  {k:<30} {result[k]}")
