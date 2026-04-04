@@ -425,30 +425,28 @@ def get_past_transactions(lat, lon, flat_type_ui, floor_category, street_upper_f
     ]
 
 
-def get_current_listings(town, flat_type_ui, floor_category, p15, p85, street_upper=None, scope="town"):
+def get_current_listings(town, flat_type_ui, block=None, scope="town"):
     """
     Current listings filtered by scope:
-      scope='town'   — same town + flat_type + floor_category, cheapest first
-      scope='street' — same street + flat_type + floor_category, cheapest first
+      scope='town'  — same town, ordered by price (cheapest first)
+      scope='block' — same block + same town, ordered by price
+    Both scopes filter on flat_type only (no floor_category filter), sorted by price_numeric.
     """
     if _ENRICHED.empty:
         return []
     ft_norm = _FT_MAP.get(flat_type_ui, flat_type_ui.upper())
-    fc = _STOREY_MAP.get(floor_category, floor_category)
+    town_upper = str(town).replace(" Town", "").strip().upper()
 
     base_mask = (
         (_ENRICHED["flat_type_norm"] == ft_norm) &
-        (_ENRICHED["floor_category"] == fc) &
         (_ENRICHED["price_numeric"].notna()) &
-        (_ENRICHED["scrape_failed"] == False)
+        (_ENRICHED["scrape_failed"] == False) &
+        (_ENRICHED["town"].str.upper().str.replace(" TOWN", "", regex=False).str.strip() == town_upper)
     )
-    if scope == "street" and street_upper:
-        mask = base_mask & (_ENRICHED["street"].str.upper().str.strip() == street_upper)
+    if scope == "block" and block:
+        mask = base_mask & (_ENRICHED["block"].astype(str).str.upper().str.strip() == str(block).upper().strip())
     else:
-        town_upper = str(town).replace(" Town", "").strip().upper()
-        mask = base_mask & (
-            _ENRICHED["town"].str.upper().str.replace(" TOWN", "", regex=False).str.strip() == town_upper
-        )
+        mask = base_mask
 
     sub = _ENRICHED[mask].sort_values("price_numeric").head(10)
 
@@ -510,8 +508,8 @@ def build_real_data(postal, flat_type_ui, storey_bin, lease_bin):
 
     trends, trend_source = get_nearby_trends(flat_lat, flat_lon, flat_type_ui, storey_bin, street_upper)
     txns          = get_past_transactions(flat_lat, flat_lon, flat_type_ui, storey_bin, street_upper)
-    listings_town = get_current_listings(town, flat_type_ui, storey_bin, p15, p85, street_upper, scope="town")
-    listings_street = get_current_listings(town, flat_type_ui, storey_bin, p15, p85, street_upper, scope="street")
+    listings_town  = get_current_listings(town, flat_type_ui, block=meta["block"], scope="town")
+    listings_block = get_current_listings(town, flat_type_ui, block=meta["block"], scope="block")
 
     return {
         "address": f"Blk {meta['block']} {meta['street'].title()}",
@@ -529,7 +527,7 @@ def build_real_data(postal, flat_type_ui, storey_bin, lease_bin):
         "_trend_source": trend_source,
         "past_transactions": txns,
         "current_listings": listings_town,
-        "current_listings_street": listings_street,
+        "current_listings_block": listings_block,
         "_model_note": model_note,
     }
 
@@ -993,13 +991,13 @@ def valuation_insight(data, listing_price, verdict, p15, p85):
     ])
 
 
-# ── Map layer config ───────────────────────────────────────────
+# ── Map layer config (palette: no blue — that's reserved for subject flat) ──
 _LAYER_STYLE = {
-    "mrt":        {"color": "#1C4ED8", "size": 12, "label": "MRT/LRT"},
-    "school":     {"color": "#D97706", "size": 10, "label": "School"},
-    "mall":       {"color": "#7C3AED", "size": 10, "label": "Mall"},
-    "healthcare": {"color": "#DC2626", "size": 10, "label": "Healthcare"},
-    "hawker":     {"color": "#059669", "size": 10, "label": "Hawker"},
+    "mrt":        {"color": "#3D9FA8", "size": 12, "label": "MRT/LRT"},       # teal/turquoise
+    "school":     {"color": "#E8C84A", "size": 10, "label": "School"},         # yellow
+    "mall":       {"color": "#E87DAD", "size": 10, "label": "Mall"},           # pink
+    "healthcare": {"color": "#B48FD4", "size": 10, "label": "Healthcare"},     # purple
+    "hawker":     {"color": "#87C4E0", "size": 10, "label": "Hawker"},         # light blue
 }
 
 def _nearby_amenity_pts(pts, user_lat, user_lon, radius_m=3000):
@@ -1106,9 +1104,9 @@ def make_listings_map(user_lat, user_lon, user_address, listings,
 # ── Listing cards ──────────────────────────────────────────────
 def listing_cards(listings, p85, scope="town"):
     sub_label = (
-        "Same street \u00b7 same flat type \u00b7 same storey \u00b7 cheapest first"
-        if scope == "street" else
-        "Same town \u00b7 same flat type \u00b7 same storey \u00b7 cheapest first"
+        "Same block \u00b7 same flat type \u00b7 cheapest first"
+        if scope == "block" else
+        "Same town \u00b7 same flat type \u00b7 cheapest first"
     )
     cards = []
     for lst in listings:
@@ -1172,8 +1170,8 @@ def listing_cards(listings, p85, scope="town"):
 
     # Scope toggle buttons
     scope_toggle = html.Div(style={"display": "flex", "gap": "6px", "marginBottom": "0"}, children=[
-        html.Button("Same Street", id="val-scope-street",
-                    className="scope-btn" + (" scope-btn-active" if scope == "street" else ""),
+        html.Button("Same Block", id="val-scope-block",
+                    className="scope-btn" + (" scope-btn-active" if scope == "block" else ""),
                     n_clicks=0),
         html.Button("Same Town", id="val-scope-town",
                     className="scope-btn" + (" scope-btn-active" if scope == "town" else ""),
@@ -1338,11 +1336,11 @@ def top_right_panel(data, listing_price=None):
 _MAP_LAYERS = [
     ("current",    "Current Listings", "#16A34A"),
     ("past",       "Past Transactions","#9CA3AF"),
-    ("mrt",        "MRT/LRT",          "#1C4ED8"),
-    ("school",     "Schools",          "#D97706"),
-    ("mall",       "Malls",            "#7C3AED"),
-    ("healthcare", "Healthcare",       "#DC2626"),
-    ("hawker",     "Hawker Centres",   "#059669"),
+    ("mrt",        "MRT/LRT",          "#3D9FA8"),
+    ("school",     "Schools",          "#C8A800"),
+    ("mall",       "Malls",            "#D45B8A"),
+    ("healthcare", "Healthcare",       "#8B5DB0"),
+    ("hawker",     "Hawker Centres",   "#4A9EC2"),
 ]
 _DEFAULT_LAYERS = {"current", "past", "mrt", "school", "mall", "healthcare", "hawker"}
 
@@ -1428,7 +1426,7 @@ def valuation_dashboard(data, listing_price=None):
             "town":                   data.get("town", ""),
             "past_transactions":      data.get("past_transactions", []),
             "current_listings":       data.get("current_listings", []),
-            "current_listings_street": data.get("current_listings_street", []),
+            "current_listings_block": data.get("current_listings_block", []),
             "p85":                    p85,
         }),
         html.Div(className="val-compact-bar", children=[
@@ -1592,21 +1590,21 @@ def toggle_map_layer(_n_clicks_list, active_layers, store):  # noqa: ARG001
 # ── Listing scope toggle callback ──────────────────────────────
 @callback(
     Output("val-listings-body", "children"),
-    Input("val-scope-street", "n_clicks"),
+    Input("val-scope-block", "n_clicks"),
     Input("val-scope-town", "n_clicks"),
     State("val-data-store", "data"),
     prevent_initial_call=True,
 )
-def toggle_listing_scope(_n_street, _n_town, store):  # noqa: ARG001
+def toggle_listing_scope(_n_block, _n_town, store):  # noqa: ARG001
     from dash import ctx
     if store is None:
         return no_update
     trig = ctx.triggered_id
-    scope = "street" if trig == "val-scope-street" else "town"
+    scope = "block" if trig == "val-scope-block" else "town"
     p85 = store.get("p85", 600000)
     listings = (
-        store.get("current_listings_street", [])
-        if scope == "street" else
+        store.get("current_listings_block", [])
+        if scope == "block" else
         store.get("current_listings", [])
     )
     # Re-render just the cards list (not the full listing_cards wrapper)
