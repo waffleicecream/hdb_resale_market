@@ -211,7 +211,7 @@ def stats_panel_content(pln_area, flat_type, chart_view="monthly"):
     median_yoy_abs = grp.get("median_yoy_abs", 0.0)
     median_yoy_pct = grp.get("median_yoy_pct", 0.0)
 
-    chart_title = "AVERAGE PRICE BY MONTH (2025)" if chart_view == "monthly" else "AVERAGE PRICE BY QUARTER (2025)"
+    chart_title = "AVERAGE PRICE BY MONTH" if chart_view == "monthly" else "AVERAGE PRICE BY QUARTER"
     chart_fig = make_price_chart(grp, chart_view) if grp else go.Figure()
 
     # Concise national about text
@@ -303,7 +303,7 @@ layout = html.Div(className="market-page", children=[
                     value="median_2025",
                     clearable=False,
                     className="form-select",
-                    style={"width": "270px", "fontSize": "13px"},
+                    style={"width": "330px", "fontSize": "13px"},
                 ),
                 # Info icon — shown only when a YoY metric is selected
                 html.Div(id="metric-info-wrap", className="metric-info-wrap", children=[
