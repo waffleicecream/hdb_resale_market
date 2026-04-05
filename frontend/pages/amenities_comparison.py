@@ -13,7 +13,7 @@ _MERGED = os.path.join(os.path.dirname(_BASE), "merged_data")
 with open(os.path.join(_BASE, "mock_data", "amenities_demo.json"), encoding="utf-8") as f:
     DEMO = json.load(f)
 
-FLAT_LABELS = ["Flat A", "Flat B", "Flat C"]
+FLAT_LABELS = ["Block A", "Block B", "Block C"]
 DEMO_POSTALS = [fd["postal_code"] for fd in DEMO["flats"].values()]
 
 # ── Backend data: load once at startup ────────────────────────
@@ -68,6 +68,7 @@ _POSTAL_LOOKUP  = _load_postal_lookup()
 _POSTAL_OPTIONS = [
     {"label": f"{p}  —  {meta['address']}, {meta['town']}", "value": p}
     for p, meta in sorted(_POSTAL_LOOKUP.items())
+    if (meta["block"], meta["street"]) in _AMENITY_LOOKUP
 ]
 
 
@@ -182,7 +183,7 @@ SECTION_DEFS = [
     ("🚇", "CONNECTIVITY",  "MRT & LRT Transit",  ["mrt_station"]),
     ("🛒", "RETAIL & FOOD", "Shopping & Hawkers", ["shopping_mall", "hawker_centre"]),
     ("🏥", "WELLNESS",      "Health & Sports",     ["polyclinic", "sports_hall", "parks"]),
-    ("🎓", "EDUCATION",     "Primary Schools",     ["primary_schools"]),
+    ("🎓", "EDUCATION",     "Pri Sch within 1km",  ["primary_schools"]),
 ]
 
 WITHIN_1KM_KEYS = {"primary_schools", "parks"}
