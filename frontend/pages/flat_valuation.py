@@ -210,44 +210,60 @@ def _load_amenity_pins():
 
 _AMENITY_PINS = _load_amenity_pins()
 
-# ── OLS model loaded once at startup ──────────────────────────
-_OLS_MODEL  = None
-_OLS_SCALER = None
-_OLS_COLS   = None
+# ── RF model loaded once at startup ───────────────────────────
+_RF_MODEL   = None
+_RF_ENCODER = None
+_RF_COLS    = None
+_RF_Q_LOW   = None
+_RF_Q_HIGH  = None
 
 try:
-    import joblib
-    import statsmodels.api as _sm
+    import joblib as _joblib
+    from huggingface_hub import hf_hub_download as _hf_hub_download
 
-    _MODEL_DIR = os.path.join(_BACKEND, "price_model")
+    _MODEL_DIR  = os.path.join(_BACKEND, "price_model")
+    _HF_REPO_ID = "xiulii/dse3101-rf-model"
+
+    # Auto-download rf_model.pkl from HuggingFace if not present locally (1.3 GB, too large for GitHub)
+    _rf_model_path = os.path.join(_MODEL_DIR, "rf_model.pkl")
+    if not os.path.exists(_rf_model_path):
+        print("[flat_valuation] rf_model.pkl not found locally — downloading from HuggingFace...")
+        _rf_model_path = _hf_hub_download(repo_id=_HF_REPO_ID, filename="rf_model.pkl",
+                                           local_dir=_MODEL_DIR)
+        print("[flat_valuation] Download complete.")
+
     if all(os.path.exists(os.path.join(_MODEL_DIR, f))
-           for f in ("ols_model.pkl", "ols_scaler.joblib", "ols_feature_cols.json")):
-        _OLS_MODEL  = _sm.load(os.path.join(_MODEL_DIR, "ols_model.pkl"))
-        _OLS_SCALER = joblib.load(os.path.join(_MODEL_DIR, "ols_scaler.joblib"))
-        with open(os.path.join(_MODEL_DIR, "ols_feature_cols.json")) as _f:
-            _OLS_COLS = json.load(_f)
+           for f in ("rf_encoder.pkl", "rf_feature_cols.pkl", "rf_conformal_quantiles.json")):
+        _RF_MODEL   = _joblib.load(_rf_model_path)
+        _RF_ENCODER = _joblib.load(os.path.join(_MODEL_DIR, "rf_encoder.pkl"))
+        _RF_COLS    = _joblib.load(os.path.join(_MODEL_DIR, "rf_feature_cols.pkl"))
+        with open(os.path.join(_MODEL_DIR, "rf_conformal_quantiles.json")) as _f:
+            _q = json.load(_f)
+            _RF_Q_LOW, _RF_Q_HIGH = _q["q_low"], _q["q_high"]
+        print("[flat_valuation] RF model loaded OK")
 except Exception as _e:
-    print(f"[flat_valuation] OLS model not loaded: {_e}")
+    print(f"[flat_valuation] RF model not loaded: {_e}")
 
 # Amenity lookup: (block_upper, street_upper) → amenity feature dict
 # Built from pipeline CSVs (2026 wins over pre-2026 on duplicate block+street)
-_OLS_CONTINUOUS = [
+_RF_CONTINUOUS = [
     "remaining_lease_years", "nearest_train_dist_m", "dist_nearest_hawker_m",
     "dist_nearest_primary_m", "num_primary_1km", "dist_nearest_park_m",
-    "dist_nearest_sportsg_m", "dist_nearest_mall_m", "dist_nearest_healthcare_m",
-    "num_parks_1km",
+    "num_parks_1km", "dist_nearest_sportsg_m", "dist_nearest_mall_m",
+    "dist_nearest_healthcare_m", "dist_cbd_m",
 ]
+_RF_CATEGORICAL = ["flat_type", "town", "floor_category"]
 
 def _build_amenity_lookup():
     lookup = {}
+    load_cols = ["block", "street_name", "town"] + _RF_CONTINUOUS
     for path in (
         os.path.join(_MERGED, "[FINAL]hdb_with_amenities_macro_pre2026.csv"),
         os.path.join(_MERGED, "[FINAL]hdb_with_amenities_macro_2026.csv"),
     ):
         if not os.path.exists(path):
             continue
-        df = pd.read_csv(path, usecols=["block", "street_name", "town"] + _OLS_CONTINUOUS,
-                         low_memory=False)
+        df = pd.read_csv(path, usecols=load_cols, low_memory=False)
         df["_bk"] = df["block"].astype(str).str.upper().str.strip()
         df["_st"] = df["street_name"].astype(str).str.upper().str.strip()
         for _, r in df.drop_duplicates(subset=["_bk", "_st"], keep="last").iterrows():
@@ -257,12 +273,12 @@ def _build_amenity_lookup():
 _AMENITY_LOOKUP = _build_amenity_lookup()
 
 
-def get_ols_prediction(block, street_upper, town, flat_type_ui, floor_category, remaining_lease_years):
+def get_rf_prediction(block, street_upper, town, flat_type_ui, floor_category, remaining_lease_years):
     """
-    Run OLS model using pre-computed amenity features from pipeline CSVs.
-    Returns (p_low, median, p_high) at 80% PI, or None if unavailable.
+    Run RF model using pre-computed amenity features from pipeline CSVs.
+    Returns (p_low, median, p_high) using conformal prediction intervals, or None if unavailable.
     """
-    if _OLS_MODEL is None or remaining_lease_years is None:
+    if _RF_MODEL is None or remaining_lease_years is None:
         return None
 
     amenity_row = _AMENITY_LOOKUP.get(
@@ -275,31 +291,23 @@ def get_ols_prediction(block, street_upper, town, flat_type_ui, floor_category, 
     fc = _STOREY_MAP.get(floor_category, floor_category)
 
     try:
-        features = {c: amenity_row[c] for c in _OLS_CONTINUOUS}
-        features["remaining_lease_years"] = remaining_lease_years
+        cont = {c: amenity_row[c] for c in _RF_CONTINUOUS}
+        cont["remaining_lease_years"] = remaining_lease_years
 
-        cont_vals   = np.array([[features[c] for c in _OLS_CONTINUOUS]])
-        cont_scaled = _OLS_SCALER.transform(cont_vals)
-        cont_df     = pd.DataFrame(cont_scaled, columns=_OLS_CONTINUOUS)
+        row = {c: cont[c] for c in _RF_CONTINUOUS}
+        row["flat_type"]      = ft
+        row["town"]           = str(town).upper().strip()
+        row["floor_category"] = fc
 
-        dummy_cols = [c for c in _OLS_COLS if c not in _OLS_CONTINUOUS]
-        row = {col: 0 for col in dummy_cols}
-        flat_col  = f"flat_type_{ft}"
-        town_col  = f"town_{str(town).upper().strip().replace(' TOWN', '')}"
-        floor_col = f"floor_category_{fc}"
-        if flat_col  in row: row[flat_col]  = 1
-        if town_col  in row: row[town_col]  = 1
-        if floor_col in row: row[floor_col] = 1
+        X = pd.DataFrame([row])[_RF_COLS]
+        X[_RF_CATEGORICAL] = _RF_ENCODER.transform(X[_RF_CATEGORICAL])
+        X = X.astype(float)
 
-        import statsmodels.api as sm
-        X_new       = pd.concat([cont_df, pd.DataFrame([row])], axis=1)[_OLS_COLS]
-        X_new_const = sm.add_constant(X_new, has_constant="add")
-        pred  = _OLS_MODEL.get_prediction(X_new_const)
-        frame = pred.summary_frame(alpha=0.2)  # 80% PI
+        point = float(np.exp(_RF_MODEL.predict(X)[0]))
         return (
-            int(np.exp(frame["obs_ci_lower"].values[0])),
-            int(np.exp(frame["mean"].values[0])),
-            int(np.exp(frame["obs_ci_upper"].values[0])),
+            int(point + _RF_Q_LOW),
+            int(point),
+            int(point + _RF_Q_HIGH),
         )
     except Exception:
         return None
@@ -512,12 +520,12 @@ def build_real_data(postal, flat_type_ui, storey_bin, lease_bin):
     else:
         remaining_lease_years = _lease_bin_midpoints.get(lease_bin)
 
-    # Try OLS model first; fall back to historical percentile placeholder
-    prediction = get_ols_prediction(meta["block"], street_upper, town, flat_type_ui, storey_bin, remaining_lease_years)
+    # Try RF model first; fall back to historical percentile placeholder
+    prediction = get_rf_prediction(meta["block"], street_upper, town, flat_type_ui, storey_bin, remaining_lease_years)
     model_note = None
     if prediction is None:
         prediction = get_placeholder_prediction(town, flat_type_ui, storey_bin)
-        model_note = "Placeholder: historical percentile. OLS model unavailable for this address."
+        model_note = "Placeholder: historical percentile. RF model unavailable for this address."
     if prediction is None:
         prediction = (400000, 500000, 600000)  # absolute fallback
         model_note = "Placeholder: default range. No data available for this address."
@@ -1012,14 +1020,14 @@ def valuation_insight(data, listing_price, verdict, p15, p85):
 
 
 # ── Map layer config (palette: no blue — that's reserved for subject flat) ──
-# Maki icon names supported by carto-positron / Mapbox GL
+# Maki symbols via Scattermap (Plotly 6.x / MapLibre — no Mapbox token needed)
 _LAYER_STYLE = {
-    "mrt":        {"color": "#3D9FA8", "size": 18, "label": "MRT/LRT",     "symbol": "rail"},
-    "school":     {"color": "#C8A800", "size": 16, "label": "School",      "symbol": "school"},
-    "mall":       {"color": "#D45B8A", "size": 16, "label": "Mall",        "symbol": "shop"},
-    "healthcare": {"color": "#8B5DB0", "size": 16, "label": "Healthcare",  "symbol": "hospital"},
-    "hawker":     {"color": "#4A9EC2", "size": 16, "label": "Hawker",      "symbol": "restaurant"},
-    "park":       {"color": "#4AAF5A", "size": 16, "label": "Park",        "symbol": "park"},
+    "mrt":        {"color": "#3D9FA8", "size": 16, "symbol": "rail",       "label": "MRT/LRT"},
+    "school":     {"color": "#C8A800", "size": 14, "symbol": "school",     "label": "School"},
+    "mall":       {"color": "#D45B8A", "size": 14, "symbol": "shop",       "label": "Mall"},
+    "healthcare": {"color": "#8B5DB0", "size": 14, "symbol": "hospital",   "label": "Healthcare"},
+    "hawker":     {"color": "#4A9EC2", "size": 14, "symbol": "restaurant", "label": "Hawker"},
+    "park":       {"color": "#4AAF5A", "size": 14, "symbol": "park",       "label": "Park"},
 }
 
 def _nearby_amenity_pts(pts, user_lat, user_lon, radius_m=3000):
@@ -1040,17 +1048,18 @@ def _nearby_amenity_pts(pts, user_lat, user_lon, radius_m=3000):
 def make_listings_map(user_lat, user_lon, user_address, listings,
                        past_txns=None, active_layers=None, amenity_pins=None):
     """
-    Build the interactive map figure.
-    active_layers: set/list of layer names to show — any of
-      'current', 'past', 'mrt', 'school', 'mall', 'healthcare', 'hawker'
+    Build the interactive map using Scattermap (Plotly 6.x / MapLibre).
+    Maki symbols render correctly without a Mapbox token on carto-positron.
+    active_layers: set of 'current', 'past', 'mrt', 'school', 'mall',
+                   'healthcare', 'hawker', 'park'
     """
     if active_layers is None:
-        active_layers = {"current", "mrt", "school", "mall", "healthcare", "hawker"}
+        active_layers = {"current", "mrt", "school", "mall", "healthcare", "hawker", "park"}
     active_layers = set(active_layers)
 
     fig = go.Figure()
 
-    # ── Amenity layers ──────────────────────────────────────────
+    # ── Amenity layers (Maki symbols via Scattermap) ────────────
     if amenity_pins:
         for atype, style in _LAYER_STYLE.items():
             if atype not in active_layers:
@@ -1058,11 +1067,11 @@ def make_listings_map(user_lat, user_lon, user_address, listings,
             pts = _nearby_amenity_pts(amenity_pins.get(atype, []), user_lat, user_lon)
             if not pts:
                 continue
-            fig.add_trace(go.Scattermapbox(
+            fig.add_trace(go.Scattermap(
                 lat=[p["lat"] for p in pts],
                 lon=[p["lon"] for p in pts],
                 mode="markers",
-                marker=go.scattermapbox.Marker(
+                marker=go.scattermap.Marker(
                     size=style["size"],
                     color=style["color"],
                     symbol=style["symbol"],
@@ -1074,29 +1083,31 @@ def make_listings_map(user_lat, user_lon, user_address, listings,
                 showlegend=False,
             ))
 
-    # ── Past transactions (grey dots) ──────────────────────────
+    # ── Past transactions (grey circles) ───────────────────────
     if "past" in active_layers and past_txns:
-        fig.add_trace(go.Scattermapbox(
-            lat=[t["lat"] for t in past_txns if t.get("lat")],
-            lon=[t["lon"] for t in past_txns if t.get("lon")],
-            mode="markers",
-            marker=go.scattermapbox.Marker(size=9, color="#9CA3AF", opacity=0.7),
-            hovertext=[
-                f"<b>Past: Blk {t['block']} {t['street']}</b><br>"
-                f"{t['floor']} · {t['flat_type']} · ${t['price']:,} ({t['date']})"
-                for t in past_txns if t.get("lat")
-            ],
-            hoverinfo="text",
-            name="Past transactions",
-            showlegend=False,
-        ))
+        valid_past = [t for t in past_txns if t.get("lat") and t.get("lon")]
+        if valid_past:
+            fig.add_trace(go.Scattermap(
+                lat=[t["lat"] for t in valid_past],
+                lon=[t["lon"] for t in valid_past],
+                mode="markers",
+                marker=go.scattermap.Marker(size=9, color="#9CA3AF", opacity=0.7),
+                hovertext=[
+                    f"<b>Past: Blk {t['block']} {t['street']}</b><br>"
+                    f"{t['floor']} · {t['flat_type']} · ${t['price']:,} ({t['date']})"
+                    for t in valid_past
+                ],
+                hoverinfo="text",
+                name="Past transactions",
+                showlegend=False,
+            ))
 
-    # ── Current listings (green numbered dots) ─────────────────
+    # ── Current listings (green numbered circles) ──────────────
     if "current" in active_layers:
         for lst in [l for l in listings if l.get("lat") is not None]:
-            fig.add_trace(go.Scattermapbox(
+            fig.add_trace(go.Scattermap(
                 lat=[lst["lat"]], lon=[lst["lon"]], mode="markers+text",
-                marker=go.scattermapbox.Marker(size=16, color="#16A34A"),
+                marker=go.scattermap.Marker(size=16, color="#16A34A"),
                 text=[str(lst["rank"])],
                 textfont=dict(size=9, color="white"),
                 hovertext=[f"<b>#{lst['rank']} Blk {lst['blk']} {lst['street']}</b><br>"
@@ -1105,21 +1116,21 @@ def make_listings_map(user_lat, user_lon, user_address, listings,
                 showlegend=False,
             ))
 
-    # ── Subject flat (always shown) ─────────────────────────────
-    fig.add_trace(go.Scattermapbox(
+    # ── Subject flat (always shown, red circle) ─────────────────
+    fig.add_trace(go.Scattermap(
         lat=[user_lat], lon=[user_lon], mode="markers+text",
-        marker=go.scattermapbox.Marker(size=22, color="#1C4ED8", symbol="marker"),
+        marker=go.scattermap.Marker(size=22, color="#DC2626", symbol="circle"),
         text=["Your flat"],
         textposition="bottom center",
-        textfont=dict(size=11, color="#1C4ED8"),
+        textfont=dict(size=11, color="#DC2626"),
         hovertext=[f"<b>Your flat</b><br>{user_address}"],
         hoverinfo="text",
         showlegend=False,
     ))
 
     fig.update_layout(
-        mapbox=dict(style="carto-positron", zoom=14,
-                    center={"lat": user_lat, "lon": user_lon}),
+        map=dict(style="carto-positron", zoom=14,
+                 center={"lat": user_lat, "lon": user_lon}),
         margin={"r": 0, "t": 0, "l": 0, "b": 0},
         paper_bgcolor="rgba(0,0,0,0)",
         showlegend=False,
@@ -1276,10 +1287,10 @@ def top_left_panel(data, listing_price=None):
         # Market premium bar
         market_premium_bar(listing_price, p15, p85),
 
-        # Placeholder model notice (shown when not demo data)
+        # Placeholder model notice (shown when RF model unavailable for this address)
         html.Div(
             "⚠ Price range based on historical percentiles. "
-            "Full Random Forest model coming soon.",
+            "RF model unavailable for this address.",
             style={"fontSize": "11px", "color": "var(--color-text-muted)",
                    "fontStyle": "italic", "marginTop": "8px"}
         ) if data.get("_model_note") else None,
@@ -1372,27 +1383,47 @@ _MAP_LAYERS = [
 _DEFAULT_LAYERS = {"current", "past", "mrt", "school", "mall", "healthcare", "hawker", "park"}
 
 
+# Icon/emoji for each layer used in the legend
+_LAYER_EMOJI = {
+    "current":    "\U0001f7e2",   # 🟢
+    "past":       "\u26aa",       # ⚪
+    "mrt":        "\U0001f687",   # 🚇
+    "school":     "\U0001f393",   # 🎓
+    "mall":       "\U0001f6cd\ufe0f", # 🛍️
+    "healthcare": "\U0001f3e5",   # 🏥
+    "hawker":     "\U0001f35c",   # 🍜
+    "park":       "\U0001f333",   # 🌳
+}
+
 def layer_toggles(active_layers):
-    """Render pill-style toggle buttons for each map layer."""
+    """Icon + label toggle buttons — active = coloured bg, inactive = white bg with border."""
     btns = []
     for key, label, color in _MAP_LAYERS:
+        emoji = _LAYER_EMOJI.get(key, "\u25cf")
         is_active = key in active_layers
         btns.append(html.Button(
-            label,
+            children=[
+                html.Span(emoji, style={"fontSize": "13px", "lineHeight": "1",
+                                        "marginRight": "5px"}),
+                html.Span(label, style={"fontSize": "11px", "fontWeight": "600"}),
+            ],
             id={"type": "map-layer-btn", "layer": key},
             n_clicks=0,
             style={
-                "fontSize": "11px", "padding": "4px 10px",
-                "borderRadius": "20px", "border": "1.5px solid",
-                "cursor": "pointer", "fontWeight": "600",
-                "borderColor": color,
+                "display": "flex", "alignItems": "center",
+                "padding": "4px 10px", "borderRadius": "20px",
+                "border": f"1.5px solid {color}",
+                "cursor": "pointer",
                 "background": color if is_active else "white",
                 "color": "white" if is_active else color,
                 "transition": "all 0.15s",
+                "fontFamily": "var(--sans)",
             },
         ))
-    return html.Div(style={"display": "flex", "flexWrap": "wrap", "gap": "6px",
-                           "marginBottom": "10px"}, children=btns)
+    return html.Div(style={
+        "display": "flex", "flexWrap": "wrap", "gap": "6px",
+        "marginBottom": "10px",
+    }, children=btns)
 
 
 # ── Bottom-left panel: map ─────────────────────────────────────
@@ -1418,7 +1449,6 @@ def bottom_left_panel(data):
             config={"displayModeBar": False, "scrollZoom": True},
             style={"height": "360px"},
         ),
-        # Hidden store: active layers
         dcc.Store(id="val-map-layers", data=list(_DEFAULT_LAYERS)),
     ])
 
@@ -1553,17 +1583,25 @@ def run_valuation(n_submit, n_demo, postal, flat_type, storey_bin, lease_bin, li
     Output("val-storey-bin", "value"),
     Output("val-lease-bin", "value"),
     Input("val-postal", "value"),
+    State("val-flat-type", "value"),
+    State("val-storey-bin", "value"),
+    State("val-lease-bin", "value"),
     prevent_initial_call=True,
 )
-def autofill_from_postal(postal):
+def autofill_from_postal(postal, current_ft, current_storey, current_lease):
     all_ft_options = [{"label": ft, "value": ft} for ft in FLAT_TYPES]
     if not postal:
         return None, all_ft_options, None, None
     meta = _POSTAL_META.get(str(postal).zfill(6))
     if not meta:
         return None, all_ft_options, None, None
-    # Pre-select from enriched data but always keep all options available
-    return meta["flat_type"], all_ft_options, meta["storey_level_bin"], meta["remaining_lease_bin"]
+    # Only autofill fields the user hasn't already set
+    return (
+        meta["flat_type"] if not current_ft else current_ft,
+        all_ft_options,
+        meta["storey_level_bin"] if not current_storey else current_storey,
+        meta["remaining_lease_bin"] if not current_lease else current_lease,
+    )
 
 
 @callback(
@@ -1587,27 +1625,20 @@ def prefill_from_store(pathname, prefill_data):
     State("val-data-store", "data"),
     prevent_initial_call=True,
 )
-def toggle_map_layer(_n_clicks_list, active_layers, store):  # noqa: ARG001
+def toggle_map_layer(_n, active_layers, store):  # noqa: ARG001
     from dash import ctx
     if not ctx.triggered_id or store is None:
         return no_update, no_update
-
     triggered_layer = ctx.triggered_id["layer"]
     active = set(active_layers or list(_DEFAULT_LAYERS))
     if triggered_layer in active:
         active.discard(triggered_layer)
     else:
         active.add(triggered_layer)
-
-    # Re-render past_txns with lat/lon for map (need to add lat/lon back)
-    past_txns_raw = store.get("past_transactions", [])
-    # past_transactions in store may not have lat/lon; fetch from _PAST_TXN by matching
-    # Actually build_real_data stores them from _get_nearby_txns which includes lat/lon cols
-    # Store them with lat/lon during get_past_transactions
     fig = make_listings_map(
         store["lat"], store["lon"], store["address"],
         store.get("current_listings", []),
-        past_txns=past_txns_raw,
+        past_txns=store.get("past_transactions", []),
         active_layers=active,
         amenity_pins=_AMENITY_PINS,
     )
