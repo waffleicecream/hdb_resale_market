@@ -406,20 +406,34 @@ def _get_nearby_txns(lat, lon, flat_type_ui, floor_category, street_upper_fallba
     if lat is not None and lon is not None:
         for radius in (200, 500):
             mask = _nearby_txn_mask(lat, lon, radius)
+            sub = _PAST_TXN[mask & (_PAST_TXN["flat_type"] == ft) & (_PAST_TXN["floor_category"] == fc)]
+            if len(sub) >= 5:
+                label = f"{radius}m radius · same flat type · same floor"
+                return sub, fc, label
+        # Widen: drop floor filter if not enough results
+        for radius in (200, 500):
+            mask = _nearby_txn_mask(lat, lon, radius)
             sub = _PAST_TXN[mask & (_PAST_TXN["flat_type"] == ft)]
             if len(sub) >= 5:
                 label = f"{radius}m radius · same flat type"
                 return sub, fc, label
-        # Use 500m result even if < 5
+        # Use 500m flat type result even if < 5
         label = "500m radius · same flat type"
         return sub, fc, label
     else:
-        # Fallback: street name
+        # Fallback: street name + floor
         sub = _PAST_TXN[
             (_PAST_TXN["street_upper"] == street_upper_fallback) &
-            (_PAST_TXN["flat_type"] == ft)
+            (_PAST_TXN["flat_type"] == ft) &
+            (_PAST_TXN["floor_category"] == fc)
         ]
-        return sub, fc, "same street · same flat type"
+        if len(sub) < 5:
+            sub = _PAST_TXN[
+                (_PAST_TXN["street_upper"] == street_upper_fallback) &
+                (_PAST_TXN["flat_type"] == ft)
+            ]
+            return sub, fc, "same street · same flat type"
+        return sub, fc, "same street · same flat type · same floor"
 
 
 def get_nearby_trends(lat, lon, flat_type_ui, floor_category, street_upper_fallback):
@@ -510,15 +524,12 @@ def build_real_data(postal, flat_type_ui, storey_bin, lease_bin):
     street_upper = str(meta["street"]).upper().strip()
     remaining_lease = str(meta.get("remaining_lease", "")) if meta.get("remaining_lease") else lease_bin
 
-    # Use actual remaining_lease_years if available, else midpoint of the user's lease bin
+    # Always use the user's selected lease bin for prediction (midpoint of the range)
     _lease_bin_midpoints = {
         "Under 60 years": 55.0, "60-75 years": 67.5,
         "75-90 years": 82.5,    "Over 90 years": 95.0,
     }
-    if pd.notna(meta.get("remaining_lease_years")):
-        remaining_lease_years = float(meta["remaining_lease_years"])
-    else:
-        remaining_lease_years = _lease_bin_midpoints.get(lease_bin)
+    remaining_lease_years = _lease_bin_midpoints.get(lease_bin)
 
     # Try RF model first; fall back to historical percentile placeholder
     prediction = get_rf_prediction(meta["block"], street_upper, town, flat_type_ui, storey_bin, remaining_lease_years)
@@ -1524,12 +1535,7 @@ def pre_search_layout(prefill=None):
             ),
             html.Div(className="valuation-form-card", children=[
                 input_form(prefill=prefill),
-                html.Button(
-                    "Try Demo \u2014 Blk 58 Toa Payoh", id="val-demo",
-                    className="btn btn-secondary",
-                    style={"width": "100%", "justifyContent": "center",
-                           "marginTop": "8px", "fontSize": "13px"},
-                ),
+                html.Button(id="val-demo", style={"display": "none"}, n_clicks=0),
             ]),
         ])
     ])
@@ -1555,12 +1561,6 @@ layout = html.Div(className="page-wrapper", id="val-page-root", children=[
     prevent_initial_call=True,
 )
 def run_valuation(n_submit, n_demo, postal, flat_type, storey_bin, lease_bin, listed):  # noqa: ARG001
-    from dash import ctx
-    trig = ctx.triggered_id
-
-    if trig == "val-demo":
-        return valuation_dashboard(DEMO, listing_price=DEMO_LISTING_PRICE), ""
-
     if not postal:
         return no_update, "Please select a postal code."
     if not flat_type:
@@ -1573,7 +1573,7 @@ def run_valuation(n_submit, n_demo, postal, flat_type, storey_bin, lease_bin, li
     listed_int = int(listed) if listed else None
     data = build_real_data(postal.strip(), flat_type, storey_bin, lease_bin)
     if data is None:
-        return no_update, "Postal code not found in our database. Try the demo instead."
+        return no_update, "Postal code not found in our database."
     return valuation_dashboard(data, listing_price=listed_int), ""
 
 
