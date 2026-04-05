@@ -128,6 +128,34 @@ def _build_postal_meta():
                 "storey_level_bin": _storey_bin(r.get("floor_category", "")),
                 "remaining_lease_bin": _lease_bin(r.get("remaining_lease", "")),
             }
+    # For postals not in enriched (no active listing), fall back to past transactions lease data
+    if not _PAST_TXN.empty and _GEOCODE_LOOKUP:
+        # Build block+street → lease from past transactions (most recent row wins)
+        sort_col = "month" if "month" in _PAST_TXN.columns else None
+        past = _PAST_TXN.copy()
+        past["_bk"] = past["block"].astype(str).str.upper().str.strip()
+        past["_st"] = past["street_name"].astype(str).str.upper().str.strip()
+        if sort_col:
+            past = past.sort_values(sort_col, ascending=False)
+        past_lease_map = (
+            past.drop_duplicates(["_bk", "_st"], keep="first")
+            .set_index(["_bk", "_st"])["remaining_lease"]
+            .to_dict()
+        )
+        for postal, g in _GEOCODE_LOOKUP.items():
+            p = str(postal).zfill(6)
+            if p in out:
+                continue
+            bk_up = str(g["block"]).upper().strip()
+            st_up = str(g["street"]).upper().strip()
+            lease = past_lease_map.get((bk_up, st_up))
+            if lease is None:
+                continue
+            out[p] = {
+                "flat_type": None,
+                "storey_level_bin": None,
+                "remaining_lease_bin": _lease_bin(lease),
+            }
     return out
 
 _POSTAL_META = _build_postal_meta()
@@ -664,6 +692,18 @@ def input_form(prefill=None, compact=False):
                              options=STOREY_BINS,
                              placeholder="Select storey", clearable=False,
                              value=pf.get("storey_level_bin"),
+                             style={"fontSize": "14px"}),
+            ]),
+            html.Div(className="form-group", children=[
+                html.Label([
+                    "Remaining Lease",
+                    html.Span(" (fixed per block)", style={"fontSize": "11px", "color": "var(--color-text-muted)", "marginLeft": "6px"}),
+                ], className="form-label"),
+                dcc.Dropdown(id="val-lease-bin",
+                             options=LEASE_BINS,
+                             placeholder="Select lease range", clearable=False,
+                             value=pf.get("remaining_lease_bin"),
+                             disabled=pf.get("remaining_lease_bin") is not None,
                              style={"fontSize": "14px"}),
             ]),
             html.Div(className="form-group", children=[
@@ -1691,6 +1731,8 @@ def run_valuation(n_submit, n_demo, postal, flat_type, storey_bin, listed):  # n
         return no_update, "Please select a flat type."
     if not storey_bin:
         return no_update, "Please select a storey level."
+    if not lease_bin:
+        return no_update, "Please select a remaining lease range."
 
     listed_int = int(listed) if listed else None
     data = build_real_data(postal.strip(), flat_type, storey_bin)
@@ -1703,6 +1745,8 @@ def run_valuation(n_submit, n_demo, postal, flat_type, storey_bin, listed):  # n
     Output("val-flat-type", "value"),
     Output("val-flat-type", "options"),
     Output("val-storey-bin", "value"),
+    Output("val-lease-bin", "value"),
+    Output("val-lease-bin", "disabled"),
     Input("val-postal", "value"),
     State("val-flat-type", "value"),
     State("val-storey-bin", "value"),
@@ -1711,15 +1755,18 @@ def run_valuation(n_submit, n_demo, postal, flat_type, storey_bin, listed):  # n
 def autofill_from_postal(postal, current_ft, current_storey):
     all_ft_options = [{"label": ft, "value": ft} for ft in FLAT_TYPES]
     if not postal:
-        return None, all_ft_options, None
+        return None, all_ft_options, None, None, False
     meta = _POSTAL_META.get(str(postal).zfill(6))
     if not meta:
-        return None, all_ft_options, None
-    # Only autofill fields the user hasn't already set
+        return None, all_ft_options, None, None, False
+    lease_val = meta["remaining_lease_bin"]
+    lease_locked = lease_val is not None  # lock if we have data for this block
     return (
         meta["flat_type"] if not current_ft else current_ft,
         all_ft_options,
         meta["storey_level_bin"] if not current_storey else current_storey,
+        lease_val if lease_val else current_lease,
+        lease_locked,
     )
 
 

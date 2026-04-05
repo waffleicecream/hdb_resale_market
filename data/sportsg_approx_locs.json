@@ -1,0 +1,227 @@
+{
+  "ActiveSG Gym@Ang Mo Kio Community Centre": {
+    "lat": 1.3673922200256,
+    "lon": 103.841127940925,
+    "min_dist_m": 80.5
+  },
+  "ActiveSG Gym@Enabling Village": {
+    "lat": 1.28707749551877,
+    "lon": 103.812705798881,
+    "min_dist_m": 125.9
+  },
+  "ActiveSG Gym@Fernvale Square": {
+    "lat": 1.3917668903484,
+    "lon": 103.873322981775,
+    "min_dist_m": 44.7
+  },
+  "ActiveSG Gym@Serangoon Central": {
+    "lat": 1.35323084558357,
+    "lon": 103.87204354837,
+    "min_dist_m": 85.2
+  },
+  "ActiveSG Gym@Toa Payoh": {
+    "lat": 1.33781465652998,
+    "lon": 103.84513085219,
+    "min_dist_m": 42.6
+  },
+  "ActiveSG Gym@Toa Payoh West Community Centre": {
+    "lat": 1.33583774995002,
+    "lon": 103.845162997311,
+    "min_dist_m": 62.6
+  },
+  "ActiveSG Hockey Village @ Boon Lay": {
+    "lat": 1.34725100297379,
+    "lon": 103.710014454331,
+    "min_dist_m": 141.3
+  },
+  "ActiveSG Sport Park @ Bedok North": {
+    "lat": 1.32716150771949,
+    "lon": 103.936824833587,
+    "min_dist_m": 87.7
+  },
+  "ActiveSG Sport Village@Jurong Town": {
+    "lat": 1.33283359282698,
+    "lon": 103.721043381424,
+    "min_dist_m": 115.3
+  },
+  "Ang Mo Kio Swimming Complex": {
+    "lat": 1.36371311763063,
+    "lon": 103.850044231877,
+    "min_dist_m": 62.0
+  },
+  "Bedok Stadium": {
+    "lat": 1.327740236451,
+    "lon": 103.939005696963,
+    "min_dist_m": 183.7
+  },
+  "Bishan Clubhouse": {
+    "lat": 1.35615290745994,
+    "lon": 103.848976985255,
+    "min_dist_m": 164.5
+  },
+  "Bishan Sport Centre": {
+    "lat": 1.35055492734245,
+    "lon": 103.852044535915,
+    "min_dist_m": 540.3
+  },
+  "Bukit Batok Swimming Complex": {
+    "lat": 1.34369796674692,
+    "lon": 103.748158134407,
+    "min_dist_m": 74.0
+  },
+  "Bukit Canberra Sport Centre": {
+    "lat": 1.44703561029032,
+    "lon": 103.82209866943,
+    "min_dist_m": 155.2
+  },
+  "Bukit Gombak Sport Centre": {
+    "lat": 1.36002945983661,
+    "lon": 103.751072294962,
+    "min_dist_m": 124.7
+  },
+  "Burghley Squash & Tennis Centre": {
+    "lat": 1.36238829184688,
+    "lon": 103.857880564737,
+    "min_dist_m": 441.6
+  },
+  "Choa Chu Kang Sport Centre": {
+    "lat": 1.39061452032511,
+    "lon": 103.747155528207,
+    "min_dist_m": 85.3
+  },
+  "Clementi Sport Centre": {
+    "lat": 1.31158040643011,
+    "lon": 103.764211279777,
+    "min_dist_m": 95.8
+  },
+  "Clementi Stadium": {
+    "lat": 1.31082250334147,
+    "lon": 103.760805958742,
+    "min_dist_m": 226.4
+  },
+  "Delta Sport Centre": {
+    "lat": 1.28974209684545,
+    "lon": 103.821375681569,
+    "min_dist_m": 165.8
+  },
+  "Geylang East Swimming Complex": {
+    "lat": 1.32131987999086,
+    "lon": 103.887277682842,
+    "min_dist_m": 56.3
+  },
+  "Heartbeat@Bedok ActiveSG Sport Centre": {
+    "lat": 1.32788785914047,
+    "lon": 103.931835804463,
+    "min_dist_m": 103.2
+  },
+  "Hougang Sport Centre": {
+    "lat": 1.37127315314256,
+    "lon": 103.88861964542,
+    "min_dist_m": 98.8
+  },
+  "Jalan Besar Sport Centre": {
+    "lat": 1.30928836905115,
+    "lon": 103.861442474883,
+    "min_dist_m": 239.7
+  },
+  "Jurong East Sport Centre": {
+    "lat": 1.34767058736295,
+    "lon": 103.728931059064,
+    "min_dist_m": 162.1
+  },
+  "Jurong Lake Gardens ActiveSG Gym & Pool": {
+    "lat": 1.32841510984309,
+    "lon": 103.724304147765,
+    "min_dist_m": 276.0
+  },
+  "Jurong West Sport Centre": {
+    "lat": 1.33911774809754,
+    "lon": 103.693671500024,
+    "min_dist_m": 78.6
+  },
+  "Kallang Basin Swimming Complex": {
+    "lat": 1.32218898844635,
+    "lon": 103.871612008197,
+    "min_dist_m": 106.0
+  },
+  "Kallang Sport Centre": {
+    "lat": 1.30704305939862,
+    "lon": 103.882688422799,
+    "min_dist_m": 463.8
+  },
+  "Katong Swimming Complex": {
+    "lat": 1.30186342536084,
+    "lon": 103.884045467548,
+    "min_dist_m": 228.0
+  },
+  "MOE (Evans)": {
+    "lat": 1.32287761525628,
+    "lon": 103.811647694363,
+    "min_dist_m": 960.3
+  },
+  "Pasir Ris Sport Centre": {
+    "lat": 1.37362757229605,
+    "lon": 103.954517357402,
+    "min_dist_m": 313.2
+  },
+  "Queenstown Sport Centre": {
+    "lat": 1.29654548545439,
+    "lon": 103.80349863067,
+    "min_dist_m": 126.6
+  },
+  "Sengkang Sport Centre": {
+    "lat": 1.39434782021906,
+    "lon": 103.88585684721,
+    "min_dist_m": 124.6
+  },
+  "Senja-Cashew Sport Centre": {
+    "lat": 1.38205844946254,
+    "lon": 103.764015424369,
+    "min_dist_m": 88.8
+  },
+  "Serangoon Sport Centre": {
+    "lat": 1.35786532790131,
+    "lon": 103.873424839621,
+    "min_dist_m": 159.2
+  },
+  "St. Wilfred Sport Centre": {
+    "lat": 1.32478615314534,
+    "lon": 103.862194367527,
+    "min_dist_m": 72.1
+  },
+  "Tampines Sport Centre": {
+    "lat": 1.3527643658377,
+    "lon": 103.938706092437,
+    "min_dist_m": 135.8
+  },
+  "Toa Payoh Sport Centre": {
+    "lat": 1.33159005591995,
+    "lon": 103.851295104405,
+    "min_dist_m": 182.4
+  },
+  "Woodlands SC": {
+    "lat": 1.4366212320968,
+    "lon": 103.78097673981,
+    "min_dist_m": 205.9
+  },
+  "Yan Kit Playfield": {
+    "lat": 1.27568847511494,
+    "lon": 103.842433449984,
+    "min_dist_m": 75.4
+  },
+  "Yio Chu Kang Sport Centre": {
+    "lat": 1.38158208102128,
+    "lon": 103.84327351566,
+    "min_dist_m": 287.7
+  },
+  "Yishun Sport Centre": {
+    "lat": 1.41177094390456,
+    "lon": 103.83336826951,
+    "min_dist_m": 245.1
+  },
+  "Yishun Swimming Complex": {
+    "lat": 1.42470239952978,
+    "lon": 103.833949786818,
+    "min_dist_m": 76.6
+  }
+}
