@@ -19,7 +19,6 @@ def navbar():
                         html.Span("PropertyMin", className="accent"),
                         "Brothers"
                     ], className="brand-name"),
-                    html.P("买房子卖房子找我们", className="brand-slogan"),
                 ]),
             ]),
             html.Div(className="navbar-links", children=[
@@ -51,3 +50,4 @@ def set_active_nav(pathname):
 
 if __name__ == "__main__":
     app.run(debug=True, port=8050)
+    
