@@ -583,7 +583,7 @@ def empty_state():
         style={"textAlign": "center", "padding": "80px 32px", "color": "var(--color-text-muted)"},
         children=[
             html.Div("📍", style={"fontSize": "40px", "marginBottom": "12px"}),
-            html.P("Enter a postal code above and click Add Flat to begin comparing.",
+            html.P("Enter a postal code above and click Add Block to begin comparing.",
                    style={"fontSize": "15px"}),
         ],
     )
