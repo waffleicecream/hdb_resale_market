@@ -137,7 +137,10 @@ def lookup_flat_by_postal(postal):
     schools_raw = row.get("primary_schools_1km", "")
     schools = [s.strip().title() for s in str(schools_raw).split("|") if s.strip() and s.strip().lower() != "nan"]
 
-    within = {"primary_schools": schools}
+    parks_raw = row.get("parks_1km", "")
+    parks = [s.strip().title() for s in str(parks_raw).split("|") if s.strip() and s.strip().lower() != "nan"]
+
+    within = {"primary_schools": schools, "parks": parks}
 
     return meta, nearest, within
 
@@ -178,9 +181,11 @@ RATING_TOOLTIP = {
 SECTION_DEFS = [
     ("🚇", "CONNECTIVITY",  "MRT & LRT Transit",  ["mrt_station"]),
     ("🛒", "RETAIL & FOOD", "Shopping & Hawkers", ["shopping_mall", "hawker_centre"]),
-    ("🏥", "WELLNESS",      "Health & Sports",     ["polyclinic", "sports_hall"]),
+    ("🏥", "WELLNESS",      "Health & Sports",     ["polyclinic", "sports_hall", "parks"]),
     ("🎓", "EDUCATION",     "Primary Schools",     ["primary_schools"]),
 ]
+
+WITHIN_1KM_KEYS = {"primary_schools", "parks"}
 
 
 # ── Pure helpers ───────────────────────────────────────────────
@@ -252,11 +257,36 @@ def amenity_cell_content(info, is_best, amenity_key, thresholds):
             html.Div(className=f"am-progress-fill {cls}", style={"width": f"{fill_pct}%"}),
         ]),
         html.Div(
-            f"PROXIMITY RATING: {rating}",
+            rating,
             className=f"am-rating-label {cls}",
             title=RATING_TOOLTIP.get(amenity_key, ""),
         ),
     ])
+
+
+def parks_cell_content(parks):
+    if not parks:
+        return html.Div([
+            html.Li(className="am-school-item", children=[
+                html.Span(className="am-school-dot outside"),
+                html.Span("No parks within 1km",
+                          style={"color": "var(--color-text-muted)", "fontStyle": "italic"}),
+            ])
+        ], className="am-school-list")
+
+    MAX_SHOWN = 5
+    items = [
+        html.Li(className="am-school-item", children=[
+            html.Span(className="am-school-dot within"),
+            html.Span(s),
+        ])
+        for s in parks[:MAX_SHOWN]
+    ]
+    extra = len(parks) - MAX_SHOWN
+    children = [html.Ul(items, className="am-school-list")]
+    if extra > 0:
+        children.append(html.Div(f"+ {extra} more", className="am-school-more"))
+    return html.Div(children)
 
 
 def school_cell_content(schools, is_best):
@@ -281,9 +311,6 @@ def school_cell_content(schools, is_best):
     children = [html.Ul(items, className="am-school-list")]
     if extra > 0:
         children.append(html.Div(f"+ {extra} more", className="am-school-more"))
-    if is_best:
-        children.append(html.Span("★ BEST", className="am-best-badge",
-                                   style={"marginTop": "6px", "display": "inline-block"}))
     return html.Div(children)
 
 
@@ -342,32 +369,19 @@ def build_comparison_table(flat_labels, flat_data, nearest_data, within_data, th
                 className="am-section-header-cell",
                 children=[html.Div(className="am-section-label", children=[
                     html.Span(icon, style={"fontSize": "16px"}),
-                    html.Div([
-                        html.Span(cat_title,
-                                  style={"fontSize": "10px", "color": "var(--color-accent)",
-                                         "letterSpacing": "0.1em", "fontWeight": "700",
-                                         "display": "block", "textTransform": "uppercase"}),
-                        html.Span(metric_title,
-                                  style={"fontSize": "14px", "fontWeight": "700",
-                                         "color": "var(--color-text-primary)"}),
-                    ]),
+                    html.Span(cat_title,
+                              style={"fontSize": "11px", "color": "var(--color-accent)",
+                                     "letterSpacing": "0.1em", "fontWeight": "700",
+                                     "textTransform": "uppercase"}),
                 ])],
             )],
         ))
 
-        if keys == ["primary_schools"]:
-            best_lbl = best_school_flat(flat_labels, within_data)
-            cells = [html.Td(style={"width": "160px", "verticalAlign": "top", "padding": "16px 12px"})]
-            for lbl in flat_labels:
-                schools = within_data.get(lbl, {}).get("primary_schools", []) or []
-                cells.append(html.Td(
-                    school_cell_content(schools, lbl == best_lbl),
-                    style={"padding": "16px 12px", "verticalAlign": "top",
-                           "borderLeft": "1px solid var(--color-border)"},
-                ))
-            tbody_rows.append(html.Tr(cells, className="am-metric-data-row"))
-        else:
-            for key in keys:
+        nearest_keys = [k for k in keys if k not in WITHIN_1KM_KEYS]
+        within_keys = [k for k in keys if k in WITHIN_1KM_KEYS]
+
+        if nearest_keys:
+            for key in nearest_keys:
                 best_lbl = best_distance_flat(flat_labels, nearest_data, key)
                 cells = [html.Td(
                     AMENITY_DISPLAY_LABELS.get(key, key),
@@ -382,6 +396,33 @@ def build_comparison_table(flat_labels, flat_data, nearest_data, within_data, th
                     )
                     cells.append(html.Td(
                         td_content,
+                        style={"padding": "16px 12px", "verticalAlign": "top",
+                               "borderLeft": "1px solid var(--color-border)"},
+                    ))
+                tbody_rows.append(html.Tr(cells, className="am-metric-data-row"))
+
+        for key in within_keys:
+            if key == "primary_schools":
+                best_lbl = best_school_flat(flat_labels, within_data)
+                cells = [html.Td(style={"width": "160px", "verticalAlign": "top", "padding": "16px 12px"})]
+                for lbl in flat_labels:
+                    schools = within_data.get(lbl, {}).get("primary_schools", []) or []
+                    cells.append(html.Td(
+                        school_cell_content(schools, lbl == best_lbl),
+                        style={"padding": "16px 12px", "verticalAlign": "top",
+                               "borderLeft": "1px solid var(--color-border)"},
+                    ))
+                tbody_rows.append(html.Tr(cells, className="am-metric-data-row"))
+            elif key == "parks":
+                cells = [html.Td(
+                    "Parks",
+                    className="am-metric-label-col",
+                    style={"width": "160px"},
+                )]
+                for lbl in flat_labels:
+                    parks = within_data.get(lbl, {}).get("parks", []) or []
+                    cells.append(html.Td(
+                        parks_cell_content(parks),
                         style={"padding": "16px 12px", "verticalAlign": "top",
                                "borderLeft": "1px solid var(--color-border)"},
                     ))
@@ -455,6 +496,15 @@ def build_verdict_section(flat_labels, nearest_data, thresholds):
     ])
 
     # Proximity rating legend rows
+    _th_style = {"padding": "4px 10px 4px 0", "fontSize": "10px", "fontWeight": "700",
+                 "textTransform": "uppercase", "letterSpacing": "0.06em", "whiteSpace": "nowrap"}
+    legend_header = html.Tr([
+        html.Th("Amenity",      style={**_th_style, "color": "var(--color-text-secondary)", "padding": "4px 12px 4px 0"}),
+        html.Th("Exceptional",  style={**_th_style, "color": "#16A34A"}),
+        html.Th("Good",         style={**_th_style, "color": "#2563EB"}),
+        html.Th("Below Avg",    style={**_th_style, "color": "#F59E0B"}),
+        html.Th("Poor",         style={**_th_style, "color": "#DC2626"}),
+    ])
     legend_rows = []
     for key, dlabel in AMENITY_DISPLAY_LABELS.items():
         t = thresholds.get(key, [5, 10, 15])
@@ -463,18 +513,18 @@ def build_verdict_section(flat_labels, nearest_data, thresholds):
                     style={"padding": "4px 12px 4px 0", "fontSize": "11px",
                            "color": "var(--color-text-secondary)", "fontWeight": "600",
                            "whiteSpace": "nowrap"}),
-            html.Td([html.Span("Exceptional", className="am-rating-label exceptional"),
-                     html.Span(f" <{t[0]} min", style={"fontSize": "10px", "color": "var(--color-text-muted)"})],
-                    style={"padding": "4px 10px 4px 0", "whiteSpace": "nowrap"}),
-            html.Td([html.Span("Good", className="am-rating-label good"),
-                     html.Span(f" {t[0]}–{t[1]} min", style={"fontSize": "10px", "color": "var(--color-text-muted)"})],
-                    style={"padding": "4px 10px 4px 0", "whiteSpace": "nowrap"}),
-            html.Td([html.Span("Below Avg", className="am-rating-label below-average"),
-                     html.Span(f" {t[1]}–{t[2]} min", style={"fontSize": "10px", "color": "var(--color-text-muted)"})],
-                    style={"padding": "4px 10px 4px 0", "whiteSpace": "nowrap"}),
-            html.Td([html.Span("Poor", className="am-rating-label poor"),
-                     html.Span(f" >{t[2]} min", style={"fontSize": "10px", "color": "var(--color-text-muted)"})],
-                    style={"padding": "4px 0", "whiteSpace": "nowrap"}),
+            html.Td(f"<{t[0]} min",
+                    style={"padding": "4px 10px 4px 0", "fontSize": "10px",
+                           "color": "var(--color-text-muted)", "whiteSpace": "nowrap"}),
+            html.Td(f"{t[0]}–{t[1]} min",
+                    style={"padding": "4px 10px 4px 0", "fontSize": "10px",
+                           "color": "var(--color-text-muted)", "whiteSpace": "nowrap"}),
+            html.Td(f"{t[1]}–{t[2]} min",
+                    style={"padding": "4px 10px 4px 0", "fontSize": "10px",
+                           "color": "var(--color-text-muted)", "whiteSpace": "nowrap"}),
+            html.Td(f">{t[2]} min",
+                    style={"padding": "4px 0", "fontSize": "10px",
+                           "color": "var(--color-text-muted)", "whiteSpace": "nowrap"}),
         ]))
 
     return html.Div(className="am-verdict-wrap", children=[
@@ -515,7 +565,7 @@ def build_verdict_section(flat_labels, nearest_data, thresholds):
                      style={"fontSize": "12px", "color": "var(--color-text-secondary)",
                             "marginBottom": "12px"}),
             html.Table(
-                legend_rows,
+                [html.Thead(legend_header), html.Tbody(legend_rows)],
                 style={"borderCollapse": "collapse", "width": "100%"},
             ),
         ]),

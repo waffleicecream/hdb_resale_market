@@ -1429,7 +1429,8 @@ a { color: inherit; text-decoration: none; }
   color: var(--color-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  padding-top: 4px !important;
+  padding: 16px 12px !important;
+  vertical-align: middle;
 }
 
 /* Amenity cell content */
@@ -1606,25 +1607,25 @@ a { color: inherit; text-decoration: none; }
 }
 .am-stat-boxes {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin: 16px 0;
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+  gap: 8px;
+  margin: 12px 0;
 }
 .am-stat-box {
   background: var(--color-bg-secondary);
   border-radius: 8px;
-  padding: 12px 16px;
+  padding: 8px 12px;
 }
 .am-stat-box-label {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--color-text-muted);
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 .am-stat-box-value {
-  font-size: 28px;
+  font-size: 22px;
   font-weight: 800;
   color: var(--color-text-primary);
   font-family: var(--mono);
