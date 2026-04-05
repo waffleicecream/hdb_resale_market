@@ -21,6 +21,7 @@ with open(os.path.join(_BASE, "..", "outputs", "market_stats.json"), encoding="u
 # ── Constants ──────────────────────────────────────────────────────────────────
 FT_BUTTONS = [
     ("All Flats", "ALL"),
+    ("2 Room",    "2 ROOM"),
     ("3 Room",    "3 ROOM"),
     ("4 Room",    "4 ROOM"),
     ("5 Room",    "5 ROOM"),
@@ -29,10 +30,15 @@ FT_BUTTONS = [
 
 METRIC_OPTIONS = [
     {"label": "Transaction Count",                 "value": "txn_2025"},
-    {"label": "Median Price",                      "value": "median_2025"},
+    {"label": "Average Price",                     "value": "median_2025"},
     {"label": "YoY Change in Transaction Count",   "value": "txn_yoy_pct"},
-    {"label": "YoY Change in Median Price",        "value": "median_yoy_pct"},
+    {"label": "YoY Change in Average Price",       "value": "median_yoy_pct"},
 ]
+
+METRIC_TOOLTIPS = {
+    "txn_yoy_pct":    "Refers to % change in transaction count across the 2 latest full years (from 2024 to 2025), by town",
+    "median_yoy_pct": "Refers to % change in average price across the 2 latest full years (from 2024 to 2025), by town",
+}
 
 DIVERGING_METRICS = {"txn_yoy_pct", "median_yoy_pct"}
 
@@ -192,7 +198,7 @@ def stats_panel_content(pln_area, flat_type, chart_view="monthly"):
         town_name   = "National Overview"
         about_text  = STATS.get("town_about", {}).get("NATIONAL", "")
         future_text = STATS.get("town_future_developments", {}).get("NATIONAL", "")
-        about_label = "About Singapore"
+        about_label = "About SG's HDB Resale Market"
 
     subtitle = "In the past year (2025)"
 
@@ -208,10 +214,20 @@ def stats_panel_content(pln_area, flat_type, chart_view="monthly"):
     chart_title = "AVERAGE PRICE BY MONTH (2025)" if chart_view == "monthly" else "AVERAGE PRICE BY QUARTER (2025)"
     chart_fig = make_price_chart(grp, chart_view) if grp else go.Figure()
 
+    # Concise national about text
+    if scope_key == "national":
+        about_text = (
+            "Singapore's HDB resale market covers 26 towns, with prices shaped by location, "
+            "flat type, floor level, and remaining lease. Mature central estates command significant "
+            "premiums over newer towns. Buyers include upgraders, first-timers ineligible for BTO, "
+            "and PRs — making this market a key indicator of housing affordability."
+        )
+
     return [
         html.Div(className="stats-panel-header", children=[
             html.P(town_name, className="stats-panel-town"),
-            html.P(subtitle,  className="stats-panel-region"),
+            html.P(subtitle,  className="stats-panel-region",
+                   style={"fontSize": "13px"}),
         ]),
         html.Div(className="stats-panel-body", children=[
 
@@ -220,13 +236,15 @@ def stats_panel_content(pln_area, flat_type, chart_view="monthly"):
                 html.Div(className="stats-mini-card", children=[
                     html.P("NO. OF TRANSACTIONS", className="stats-mini-label"),
                     html.P(f"{txn_2025:,}", className="stats-mini-value"),
-                    html.P([_change_span(txn_yoy_abs, txn_yoy_pct)],
+                    html.P([_change_span(txn_yoy_abs, txn_yoy_pct),
+                            html.Span(" from 2024", style={"fontSize": "11px", "color": "#9CA3AF"})],
                            style={"fontSize": "12px", "marginTop": "3px"}),
                 ]),
                 html.Div(className="stats-mini-card", children=[
-                    html.P("MEDIAN PRICE", className="stats-mini-label"),
+                    html.P("AVERAGE PRICE", className="stats-mini-label"),
                     html.P(f"${median_2025:,.0f}", className="stats-mini-value"),
-                    html.P([_change_span(median_yoy_abs, median_yoy_pct)],
+                    html.P([_change_span(median_yoy_abs, median_yoy_pct),
+                            html.Span(" from 2024", style={"fontSize": "11px", "color": "#9CA3AF"})],
                            style={"fontSize": "12px", "marginTop": "3px"}),
                 ]),
                 _txn_card("HIGHEST PRICED TRANSACTION", grp.get("highest", {})),
@@ -255,14 +273,16 @@ def stats_panel_content(pln_area, flat_type, chart_view="monthly"):
 
             # About section
             html.Div(className="town-summary-section", children=[
-                html.P(about_label, className="chart-section-label"),
+                html.P(about_label, className="chart-section-label",
+                       style={"color": "#1E293B"}),
                 html.P(about_text or "No description available.",
                        className="town-summary-text"),
             ]),
 
             # Future developments section
             html.Div(className="developments-section", children=[
-                html.P("Future Developments", className="developments-label"),
+                html.P("Future Developments", className="developments-label",
+                       style={"color": "#1E293B"}),
                 html.P(future_text or "No upcoming developments have been confirmed for this town.",
                        className="developments-text"),
             ]),
@@ -276,14 +296,21 @@ layout = html.Div(className="market-page", children=[
 
     html.Div(className="map-panel", children=[
         html.Div(className="map-controls", children=[
-            dcc.Dropdown(
-                id="map-metric",
-                options=METRIC_OPTIONS,
-                value="median_2025",
-                clearable=False,
-                className="form-select",
-                style={"width": "270px", "fontSize": "13px"},
-            ),
+            html.Div(style={"display": "flex", "alignItems": "center", "gap": "6px"}, children=[
+                dcc.Dropdown(
+                    id="map-metric",
+                    options=METRIC_OPTIONS,
+                    value="median_2025",
+                    clearable=False,
+                    className="form-select",
+                    style={"width": "270px", "fontSize": "13px"},
+                ),
+                # Info icon — shown only when a YoY metric is selected
+                html.Div(id="metric-info-wrap", className="metric-info-wrap", children=[
+                    html.Span("ℹ", className="metric-info-icon", id="metric-info-icon"),
+                    html.Div(id="metric-info-tooltip", className="metric-info-tooltip"),
+                ]),
+            ]),
             html.Div(className="flat-type-btn-group", children=[
                 html.Button(label, id=bid,
                             className="ft-btn active" if key == "ALL" else "ft-btn",
@@ -333,6 +360,18 @@ def update_ft_btn_styles(active):
 )
 def set_chart_view(*_):
     return "quarterly" if ctx.triggered_id == "chart-btn-quarterly" else "monthly"
+
+
+@callback(
+    Output("metric-info-wrap",    "style"),
+    Output("metric-info-tooltip", "children"),
+    Input("map-metric", "value"),
+)
+def update_metric_info(metric):
+    tip = METRIC_TOOLTIPS.get(metric)
+    if tip:
+        return {"display": "flex"}, tip
+    return {"display": "none"}, ""
 
 
 @callback(
