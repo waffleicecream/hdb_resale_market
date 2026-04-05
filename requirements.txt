@@ -9,7 +9,7 @@ numpy>=1.24.0,<2.0.0
 pyarrow>=14.0.0
 
 # ML — rf_model.pkl was built with sklearn 1.4.x; keep compatible
-scikit-learn>=1.4.0,<1.5.0
+scikit-learn>=1.7.2
 joblib>=1.3.0
 statsmodels>=0.14.0
 

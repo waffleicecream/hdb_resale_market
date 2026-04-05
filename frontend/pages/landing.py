@@ -4,34 +4,20 @@ from dash import html
 dash.register_page(__name__, path="/", name="Home")
 
 
-# ── Step strip ────────────────────────────────────────────────
-def step_strip():
-    steps = [
-        ("①", "Where should I buy?"),
-        ("②", "Which flat is better?"),
-        ("③", "Is it worth the price?"),
-    ]
-    items = []
-    for i, (num, label) in enumerate(steps):
-        items.append(
-            html.Div(className="step-strip-item", children=[
-                html.Span(num, className="step-strip-num"),
-                html.Span(label, className="step-strip-label"),
-            ])
-        )
-        if i < len(steps) - 1:
-            items.append(html.Span("→", className="step-strip-arrow"))
-    return html.Div(className="step-strip", children=items)
-
-
-# ── Tool cards ────────────────────────────────────────────────
-def tool_card(step_label, accent_cls, icon, title, desc, cta, href):
-    return html.A(className=f"tool-card-v2 {accent_cls}", href=href, children=[
-        html.Div(className="tool-card-step", children=step_label),
-        html.Div(icon, className="tool-card-icon"),
-        html.Div(title, className="tool-card-title"),
-        html.P(desc, className="tool-card-desc"),
-        html.Span(cta, className="tool-card-cta"),
+# ── OGP-style tool card ───────────────────────────────────────
+def ogp_card(image_src, tagline, description, tool_name, href):
+    return html.A(className="ogp-card", href=href, children=[
+        html.Div(className="ogp-card-image-wrap", children=[
+            html.Img(src=image_src, className="ogp-card-image"),
+        ]),
+        html.Div(className="ogp-card-body", children=[
+            html.H3(tagline, className="ogp-card-tagline"),
+            html.P(description, className="ogp-card-desc"),
+            html.Span(className="ogp-card-tool-name", children=[
+                tool_name,
+                html.Span(" ↗", className="ogp-card-arrow"),
+            ]),
+        ]),
     ])
 
 
@@ -42,7 +28,11 @@ layout = html.Div(className="page-wrapper", children=[
     html.Section(className="hero hero-compact", children=[
         html.Div(className="hero-inner hero-inner-compact", children=[
             html.Div(className="hero-content", children=[
-                html.H1("Find the Right HDB Resale Flat", className="hero-title hero-title-compact"),
+                html.H1([
+                    "Find the right HDB Resale Flat",
+                    html.Br(),
+                    "for ", html.Span("all your needs.", className="accent-word"),
+                ], className="hero-title hero-title-compact"),
                 html.P(
                     "Compare towns, evaluate amenities, and check if a flat is fairly priced — all in one place.",
                     className="hero-subtitle",
@@ -54,31 +44,31 @@ layout = html.Div(className="page-wrapper", children=[
         ])
     ]),
 
-    # ── Journey section ───────────────────────────────────────
-    html.Section(className="tools-section", children=[
-        html.Div(className="tools-section-inner", children=[
-            html.H2("Three Tools for Every Stage of Your Search", className="section-heading"),
-            html.P("Not sure where to start? Follow the steps below.",
-                   className="section-subheading"),
-            step_strip(),
-            html.Div(className="tools-grid-v2", children=[
-                tool_card(
-                    "STEP 1 · Where should I buy?", "card-blue",
-                    "📊", "Explore towns before choosing a flat",
-                    "See price trends, growth, and transaction activity across Singapore.",
-                    "Explore →", "/market-analysis",
+    # ── OGP-style tools section ───────────────────────────────
+    html.Section(className="ogp-section", children=[
+        html.Div(className="ogp-section-inner", children=[
+            html.H2("Three tools for every stage of your search:", className="ogp-section-heading"),
+            html.Div(className="ogp-cards-grid", children=[
+                ogp_card(
+                    image_src="/assets/town.jpg",
+                    tagline="Which town should I buy in?",
+                    description="Explore resale price trends and demand patterns across Singapore to find a town that matches your budget and investment goals.",
+                    tool_name="Market Analysis",
+                    href="/market-analysis",
                 ),
-                tool_card(
-                    "STEP 2 · Which flat is better?", "card-yellow",
-                    "📍", "Compare shortlisted flats",
-                    "Compare proximity to MRT, hawker centres, schools, malls, and polyclinics side by side.",
-                    "Compare →", "/amenities-comparison",
+                ogp_card(
+                    image_src="/assets/amenities.jpg",
+                    tagline="What amenities are near this flat?",
+                    description="Compare resale flats side by side on proximity to MRT stations, schools, hawker centres and more.",
+                    tool_name="Amenities Comparison",
+                    href="/amenities-comparison",
                 ),
-                tool_card(
-                    "STEP 3 · Is it worth the price?", "card-green",
-                    "🏠", "Check if a flat is overpriced",
-                    "Get a fair price estimate and see similar transactions nearby.",
-                    "Evaluate →", "/flat-valuation",
+                ogp_card(
+                    image_src="/assets/valuation.jpg",
+                    tagline="Is this flat listing priced fairly?",
+                    description="Estimate the market value of any HDB resale flat using our state-of-the-art machine learning algorithm, so you can negotiate with confidence.",
+                    tool_name="Flat Valuation",
+                    href="/flat-valuation",
                 ),
             ]),
         ])

@@ -1,6 +1,16 @@
 import dash
 from dash import Dash, html, dcc, callback, Output, Input
 
+import numpy as np
+
+class LogToPriceWrapper:
+    def __init__(self, model):
+        self.model = model
+    
+    def predict(self, X):
+        log_pred = self.model.predict(X)
+        return np.exp(log_pred)
+
 app = Dash(
     __name__,
     use_pages=True,

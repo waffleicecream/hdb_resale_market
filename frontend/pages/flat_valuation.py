@@ -3,7 +3,7 @@ import requests
 import pandas as pd
 import numpy as np
 import dash
-from dash import html, dcc, callback, Output, Input, State, no_update
+from dash import html, dcc, callback, Output, Input, State, no_update, ctx
 import plotly.graph_objects as go
 from dotenv import load_dotenv
 
@@ -408,17 +408,17 @@ def _get_nearby_txns(lat, lon, flat_type_ui, floor_category, street_upper_fallba
             mask = _nearby_txn_mask(lat, lon, radius)
             sub = _PAST_TXN[mask & (_PAST_TXN["flat_type"] == ft) & (_PAST_TXN["floor_category"] == fc)]
             if len(sub) >= 5:
-                label = f"{radius}m radius · same flat type · same floor"
+                label = f"Within {radius}m of your flat · {flat_type_ui} · {floor_category} floor"
                 return sub, fc, label
         # Widen: drop floor filter if not enough results
         for radius in (200, 500):
             mask = _nearby_txn_mask(lat, lon, radius)
             sub = _PAST_TXN[mask & (_PAST_TXN["flat_type"] == ft)]
             if len(sub) >= 5:
-                label = f"{radius}m radius · same flat type"
+                label = f"Within {radius}m of your flat · {flat_type_ui} · all floors"
                 return sub, fc, label
         # Use 500m flat type result even if < 5
-        label = "500m radius · same flat type"
+        label = f"Within 500m of your flat · {flat_type_ui} · all floors"
         return sub, fc, label
     else:
         # Fallback: street name + floor
@@ -432,8 +432,8 @@ def _get_nearby_txns(lat, lon, flat_type_ui, floor_category, street_upper_fallba
                 (_PAST_TXN["street_upper"] == street_upper_fallback) &
                 (_PAST_TXN["flat_type"] == ft)
             ]
-            return sub, fc, "same street · same flat type"
-        return sub, fc, "same street · same flat type · same floor"
+            return sub, fc, f"Same street · {flat_type_ui}"
+        return sub, fc, f"Same street · {flat_type_ui} · {floor_category} floor"
 
 
 def get_nearby_trends(lat, lon, flat_type_ui, floor_category, street_upper_fallback):
@@ -600,7 +600,7 @@ LEASE_BINS = [
     {"label": "Over 90 years", "value": "Over 90 years"},
 ]
 
-DEMO_LISTING_PRICE = 650000  # above p85=598000 — showcases OVERPRICED state
+DEMO_LISTING_PRICE = 1258000  # Blk 87 Dawson Rd, QS — above RF p85=1,155,249 by ~$103k (+8.9%)
 
 
 # ── Verdict logic ──────────────────────────────────────────────
@@ -657,6 +657,7 @@ def input_form(prefill=None, compact=False):
                 html.Label("Listed Price (optional)", className="form-label"),
                 dcc.Input(id="val-listed", type="number", min=0,
                           placeholder="e.g. 638000", className="form-input",
+                          value=pf.get("listed_price"),
                           debounce=True),
             ]),
             html.Div(className="form-group val-submit-col", children=[
@@ -835,13 +836,54 @@ def make_trend_chart(trend_data, listing_price=None, p15=None, p85=None):
     return fig
 
 
-# ── Past transactions table (scrollable) ──────────────────────
-def past_data_table(data):
-    txns = data.get("past_transactions", [])
-    town = data.get("town", "this area")
-    fallback = len(txns) < 3
-    rows = [
-        html.Tr([
+# ── Past transactions table (scrollable, sortable) ────────────
+_TXN_COLS = [
+    ("date",             "MONTH"),
+    ("address",          "ADDRESS"),
+    ("floor",            "STOREY"),
+    ("flat_type",        "FLAT TYPE"),
+    ("remaining_lease",  "LEASE"),
+    ("price",            "PRICE"),
+]
+
+
+def _txn_sort_key(txn, col):
+    """Return a sortable value for a transaction dict by column key."""
+    import re as _re
+    if col == "date":
+        try:
+            import datetime as _dt
+            return _dt.datetime.strptime(txn.get("date", "Jan 2000"), "%b %Y")
+        except Exception:
+            return txn.get("date", "")
+    elif col == "address":
+        blk = txn.get("block", txn.get("blk", ""))
+        return f"{txn.get('street', '')} {blk}".upper()
+    elif col == "floor":
+        m = _re.search(r"\d+", str(txn.get("floor", "0")))
+        return int(m.group()) if m else 0
+    elif col == "flat_type":
+        return str(txn.get("flat_type", "")).upper()
+    elif col == "remaining_lease":
+        raw = str(txn.get("remaining_lease", "—"))
+        if raw in ("—", "", "nan"):
+            return -1.0
+        m = _re.search(r"(\d+)\s+year", raw)
+        mo = _re.search(r"(\d+)\s+month", raw)
+        years = int(m.group(1)) if m else 0
+        months = int(mo.group(1)) if mo else 0
+        return years + months / 12.0
+    elif col == "price":
+        return txn.get("price", 0)
+    return ""
+
+
+def _txn_rows(txns, sort_col, sort_asc):
+    if sort_col:
+        txns = sorted(txns, key=lambda t: _txn_sort_key(t, sort_col), reverse=not sort_asc)
+    rows = []
+    for t in txns[:10]:
+        rows.append(html.Tr([
             html.Td(t["date"],
                     style={"fontSize": "12px", "color": "var(--color-text-secondary)"}),
             html.Td(f"Blk {t.get('block', t.get('blk',''))} {t.get('street','').title()}",
@@ -851,8 +893,40 @@ def past_data_table(data):
             html.Td(t.get("remaining_lease", "—"),
                     style={"fontSize": "12px", "color": "var(--color-text-secondary)"}),
             html.Td(f"${t['price']:,.0f}", className="td-price"),
-        ]) for t in txns[:10]
+        ]))
+    return rows
+
+
+def _sort_icon(col, sort_col, sort_asc):
+    if col != sort_col:
+        return "\u21c5"   # ⇅
+    return "\u2191" if sort_asc else "\u2193"  # ↑ / ↓
+
+
+def past_data_table(data, sort_col=None, sort_asc=True):
+    txns = data.get("past_transactions", [])
+    town = data.get("town", "this area")
+    fallback = len(txns) < 3
+    rows = _txn_rows(txns, sort_col, sort_asc)
+
+    header_cells = [
+        html.Th(
+            html.Button(
+                [label, html.Span(_sort_icon(col_key, sort_col, sort_asc),
+                                  style={"marginLeft": "4px", "fontSize": "10px",
+                                         "opacity": "0.7" if col_key != sort_col else "1"})],
+                id={"type": "txn-sort-col", "col": col_key},
+                n_clicks=0,
+                style={"background": "none", "border": "none", "cursor": "pointer",
+                       "fontWeight": "700", "fontSize": "11px", "letterSpacing": "0.05em",
+                       "color": "var(--color-text-muted)" if col_key != sort_col else "var(--color-primary)",
+                       "padding": "0", "display": "flex", "alignItems": "center",
+                       "gap": "2px", "whiteSpace": "nowrap"},
+            )
+        )
+        for col_key, label in _TXN_COLS
     ]
+
     return html.Div([
         html.Div(
             f"\u26a0\ufe0f Limited transactions on this street. "
@@ -861,15 +935,12 @@ def past_data_table(data):
         ) if fallback else None,
         html.Div(className="val-txn-scroll", children=[
             html.Table(className="data-table", children=[
-                html.Thead(html.Tr([
-                    html.Th("MONTH"), html.Th("ADDRESS"),
-                    html.Th("STOREY"), html.Th("FLAT TYPE"), html.Th("LEASE"), html.Th("PRICE"),
-                ])),
-                html.Tbody(rows),
+                html.Thead(html.Tr(header_cells)),
+                html.Tbody(id="val-txn-tbody", children=rows),
             ]),
-        ]) if rows else html.P("No recent transactions found.",
-                               style={"color": "var(--color-text-muted)",
-                                      "fontSize": "13px"}),
+        ]) if (rows or txns) else html.P("No recent transactions found.",
+                                         style={"color": "var(--color-text-muted)",
+                                                "fontSize": "13px"}),
     ])
 
 
@@ -1491,11 +1562,17 @@ def bottom_right_panel(data, p85):
 # ── Overpriced banner (amber style) ───────────────────────────
 def overpriced_banner():
     return html.Div(className="overpriced-banner", children=[
-        html.P("\u26a0\ufe0f  Overpriced? Check out potential alternatives below",
+        html.P("\u26a0\ufe0f  Overpriced? Explore potential alternatives below",
                className="overpriced-banner-title"),
-        html.P("Current listings matched on flat type, storey level, and remaining "
-               "lease \u2014 sorted by similarity to your flat.",
-               className="overpriced-banner-sub"),
+        html.P([
+            "Alternatives are matched on flat type, storey level, and remaining lease \u2014 "
+            "sorted by price. Some may be in nearby towns. "
+            "Note their postal codes and use the ",
+            dcc.Link("Amenities Comparison", href="/amenities-comparison",
+                     style={"color": "inherit", "fontWeight": "600",
+                            "textDecoration": "underline"}),
+            " tool to weigh location trade-offs before deciding.",
+        ], className="overpriced-banner-sub"),
     ])
 
 
@@ -1503,6 +1580,7 @@ def overpriced_banner():
 def valuation_dashboard(data, listing_price=None):
     p15 = data["projection"]["p15"]
     p85 = data["projection"]["p85"]
+    prefill_data = dict(data, listed_price=listing_price)
 
     children = [
         # Hidden data store for callbacks
@@ -1516,12 +1594,16 @@ def valuation_dashboard(data, listing_price=None):
             "current_listings_block": data.get("current_listings_block", []),
             "p85":                    p85,
         }),
+        dcc.Store(id="val-txn-sort", data={"col": None, "asc": True}),
         html.Div(className="val-compact-bar", children=[
             html.Div(className="val-compact-inner", children=[
-                input_form(prefill=data, compact=True),
+                input_form(prefill=prefill_data, compact=True),
             ]),
         ]),
-        html.Button(id="val-demo", style={"display": "none"}, n_clicks=0),
+        html.Button("Load Demo", id="val-demo",
+                    className="btn btn-secondary val-demo-btn",
+                    n_clicks=0,
+                    style={"display": "none"}),  # hidden in compact bar — accessible via pre-search
         html.Div(className="val-top-row val-content-area", children=[
             top_left_panel(data, listing_price),
             top_right_panel(data, listing_price),
@@ -1554,7 +1636,12 @@ def pre_search_layout(prefill=None):
             ),
             html.Div(className="valuation-form-card", children=[
                 input_form(prefill=prefill),
-                html.Button(id="val-demo", style={"display": "none"}, n_clicks=0),
+                html.Div(style={"display": "flex", "gap": "8px", "marginTop": "8px"}, children=[
+                    html.Button("Load Demo", id="val-demo",
+                                className="btn btn-secondary val-demo-btn",
+                                n_clicks=0,
+                                title="Load a real overpriced listing in Queenstown as a demo"),
+                ]),
             ]),
         ])
     ])
@@ -1580,6 +1667,10 @@ layout = html.Div(className="page-wrapper", id="val-page-root", children=[
     prevent_initial_call=True,
 )
 def run_valuation(n_submit, n_demo, postal, flat_type, storey_bin, lease_bin, listed):  # noqa: ARG001
+    # Demo short-circuit: bypass form validation and use pre-built DEMO data
+    if ctx.triggered_id == "val-demo":
+        return valuation_dashboard(DEMO, listing_price=DEMO_LISTING_PRICE), ""
+
     if not postal:
         return no_update, "Please select a postal code."
     if not flat_type:
@@ -1693,6 +1784,30 @@ def toggle_listing_scope(_n_block, _n_town, store):  # noqa: ARG001
                style={"padding": "16px", "color": "var(--color-text-muted)",
                       "fontSize": "13px"})
     )
+
+
+# ── Past transactions sort callback ───────────────────────────
+@callback(
+    Output("val-txn-sort",  "data"),
+    Output("val-txn-tbody", "children"),
+    Input({"type": "txn-sort-col", "col": dash.ALL}, "n_clicks"),
+    State("val-txn-sort",  "data"),
+    State("val-data-store", "data"),
+    prevent_initial_call=True,
+)
+def sort_past_transactions(_n, sort_state, store):
+    if not ctx.triggered_id or store is None:
+        return no_update, no_update
+    col = ctx.triggered_id["col"]
+    prev_col = sort_state.get("col")
+    prev_asc = sort_state.get("asc", True)
+    if col == prev_col:
+        new_asc = not prev_asc
+    else:
+        new_asc = True
+    txns = store.get("past_transactions", [])
+    rows = _txn_rows(txns, col, new_asc)
+    return {"col": col, "asc": new_asc}, rows
 
 
 def _listing_card(lst, p85):
