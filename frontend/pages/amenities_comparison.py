@@ -65,6 +65,11 @@ def _load_postal_lookup():
 _AMENITY_LOOKUP = _load_amenity_lookup()
 _POSTAL_LOOKUP  = _load_postal_lookup()
 
+_POSTAL_OPTIONS = [
+    {"label": f"{p}  —  {meta['address']}, {meta['town']}", "value": p}
+    for p, meta in sorted(_POSTAL_LOOKUP.items())
+]
+
 
 def lookup_flat_by_postal(postal):
     """
@@ -538,12 +543,10 @@ def empty_state():
 
 def build_page_header():
     return html.Div([
-        html.Div("Premium Editorial Guide", className="am-editorial-badge"),
-        html.H1("Location Intelligence Dashboard", className="am-page-title"),
+        html.H1("Amenities Comparison Tool — Block Level", className="am-page-title"),
         html.P(
-            "Analyze lifestyle proximity metrics across multiple properties. "
-            "Our institutional-grade data evaluates walkability, transport "
-            "efficiency, and essential service accessibility.",
+            "Analyze and compare amenity proximity across up to 3 HDB blocks. "
+            "Evaluate walkability, transport access, and essential services side by side.",
             className="am-page-subtitle",
         ),
     ])
@@ -551,18 +554,21 @@ def build_page_header():
 
 def build_input_bar():
     return html.Div(className="am-input-bar", children=[
-        html.Div("Compare up to 3 flats", className="am-input-bar-label"),
+        html.Div("Compare up to 3 blocks", className="am-input-bar-label"),
         html.Div(className="am-input-controls", children=[
             html.Div(className="am-postal-wrap", children=[
-                html.Span("📍", className="am-pin-icon"),
-                dcc.Input(
-                    id="postal-input", type="text", maxLength=6,
-                    placeholder="Enter postal code (e.g., 310058)...",
-                    className="am-postal-input", debounce=False, n_submit=0,
+                dcc.Dropdown(
+                    id="postal-input",
+                    options=_POSTAL_OPTIONS,
+                    placeholder="Search by postal code or address...",
+                    className="am-postal-dropdown",
+                    searchable=True,
+                    clearable=True,
+                    style={"width": "380px"},
                 ),
             ]),
             html.Div(style={"display": "flex", "gap": "8px", "alignItems": "center"}, children=[
-                html.Button("Add Flat", id="add-btn", className="btn btn-primary",
+                html.Button("Add Block", id="add-btn", className="btn btn-primary",
                             style={"padding": "9px 24px"}),
                 html.Button("Load Demo", id="demo-btn", className="btn btn-secondary",
                             style={"padding": "8px 20px", "fontSize": "13px"}),
@@ -601,7 +607,6 @@ layout = html.Div(className="page-wrapper", children=[
     Output("flats-store", "data"),
     Output("postal-input", "value"),
     Input("add-btn", "n_clicks"),
-    Input("postal-input", "n_submit"),
     Input("demo-btn", "n_clicks"),
     Input("clear-btn", "n_clicks"),
     Input({"type": "remove-flat", "index": ALL}, "n_clicks"),
@@ -609,21 +614,21 @@ layout = html.Div(className="page-wrapper", children=[
     State("flats-store", "data"),
     prevent_initial_call=True,
 )
-def update_store(n_add, n_submit, n_demo, n_clear, n_removes, postal, store):
+def update_store(n_add, n_demo, n_clear, n_removes, postal, store):
     trig = ctx.triggered_id
     if trig == "clear-btn":
-        return [], ""
+        return [], None
     if trig == "demo-btn":
-        return DEMO_POSTALS[:], ""
+        return DEMO_POSTALS[:], None
     if isinstance(trig, dict) and trig.get("type") == "remove-flat":
         return [p for p in store if p != trig["index"]], no_update
-    if trig in ("add-btn", "postal-input"):
-        if not postal or len(postal.strip()) != 6 or not postal.strip().isdigit():
+    if trig == "add-btn":
+        if not postal:
             return no_update, no_update
-        p = postal.strip()
+        p = str(postal).strip()
         if p in store or len(store) >= 3:
-            return no_update, ""
-        return store + [p], ""
+            return no_update, None
+        return store + [p], None
     return no_update, no_update
 
 
