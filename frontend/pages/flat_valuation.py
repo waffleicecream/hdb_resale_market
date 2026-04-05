@@ -132,6 +132,25 @@ def _build_postal_meta():
 
 _POSTAL_META = _build_postal_meta()
 
+# ── Postal → lease_commence_date lookup ────────────────────────
+def _load_postal_lease():
+    path = os.path.join(_DATA, "postal_lease.csv")
+    if not os.path.exists(path):
+        return {}
+    df = pd.read_csv(path, dtype={"postal_code": str})
+    df["postal_code"] = df["postal_code"].str.zfill(6)
+    return dict(zip(df["postal_code"], df["lease_commence_date"].astype(int)))
+
+_POSTAL_LEASE = _load_postal_lease()
+
+def _lease_bin_from_years(y):
+    if y is None:
+        return None
+    if y < 60:  return "Under 60 years"
+    if y < 75:  return "60-75 years"
+    if y < 90:  return "75-90 years"
+    return "Over 90 years"
+
 # UI flat_type ("4-Room") → data flat_type ("4 ROOM")
 _FT_MAP = {
     "2-Room": "2 ROOM", "3-Room": "3 ROOM", "4-Room": "4 ROOM",
@@ -528,7 +547,7 @@ def get_current_listings(town, flat_type_ui, storey_bin=None, lease_bin=None, bl
     return listings
 
 
-def build_real_data(postal, flat_type_ui, storey_bin, lease_bin):
+def build_real_data(postal, flat_type_ui, storey_bin):
     """
     Build the data dict consumed by valuation_dashboard().
     Returns None if postal code not found.
@@ -539,14 +558,16 @@ def build_real_data(postal, flat_type_ui, storey_bin, lease_bin):
 
     town = str(meta.get("town", "")).replace(" Town", "").strip().upper()
     street_upper = str(meta["street"]).upper().strip()
-    remaining_lease = str(meta.get("remaining_lease", "")) if meta.get("remaining_lease") else lease_bin
 
-    # Always use the user's selected lease bin for prediction (midpoint of the range)
-    _lease_bin_midpoints = {
-        "Under 60 years": 55.0, "60-75 years": 67.5,
-        "75-90 years": 82.5,    "Over 90 years": 95.0,
-    }
-    remaining_lease_years = _lease_bin_midpoints.get(lease_bin)
+    # Compute remaining lease from lease_commence_date (current year = 2026)
+    lease_commence = _POSTAL_LEASE.get(str(postal).strip().zfill(6))
+    if lease_commence:
+        remaining_lease_years = 99 - (2026 - int(lease_commence))
+        remaining_lease = f"{remaining_lease_years} years"
+    else:
+        remaining_lease_years = None
+        remaining_lease = str(meta.get("remaining_lease", "")) or "—"
+    lease_bin = _lease_bin_from_years(remaining_lease_years)
 
     # Try RF model first; fall back to historical percentile placeholder
     prediction = get_rf_prediction(meta["block"], street_upper, town, flat_type_ui, storey_bin, remaining_lease_years)
@@ -577,7 +598,7 @@ def build_real_data(postal, flat_type_ui, storey_bin, lease_bin):
         "flat_type": flat_type_ui,
         "storey_level_bin": storey_bin,
         "remaining_lease_bin": lease_bin,
-        "remaining_lease": remaining_lease or lease_bin,
+        "remaining_lease": remaining_lease,
         "projection": {"p15": p15, "p85": p85},
         "graph_trend": trends,
         "_trend_source": trend_source,
@@ -646,21 +667,15 @@ def input_form(prefill=None, compact=False):
                              style={"fontSize": "14px"}),
             ]),
             html.Div(className="form-group", children=[
-                html.Label("Remaining Lease", className="form-label"),
-                dcc.Dropdown(id="val-lease-bin",
-                             options=LEASE_BINS,
-                             placeholder="Select lease range", clearable=False,
-                             value=pf.get("remaining_lease_bin"),
-                             style={"fontSize": "14px"}),
-            ]),
-            html.Div(className="form-group", children=[
                 html.Label("Listed Price (optional)", className="form-label"),
                 dcc.Input(id="val-listed", type="number", min=0,
                           placeholder="e.g. 638000", className="form-input",
                           value=pf.get("listed_price"),
                           debounce=True),
             ]),
-            html.Div(className="form-group val-submit-col", children=[
+            html.Div(className="form-group val-submit-col",
+                     style={"gridColumn": "1 / -1"} if not compact else {},
+                     children=[
                 html.P(id="val-error",
                        style={"color": "var(--color-danger)", "fontSize": "12px",
                               "minHeight": "16px", "marginBottom": "4px"}),
@@ -1662,11 +1677,10 @@ layout = html.Div(className="page-wrapper", id="val-page-root", children=[
     State("val-postal", "value"),
     State("val-flat-type", "value"),
     State("val-storey-bin", "value"),
-    State("val-lease-bin", "value"),
     State("val-listed", "value"),
     prevent_initial_call=True,
 )
-def run_valuation(n_submit, n_demo, postal, flat_type, storey_bin, lease_bin, listed):  # noqa: ARG001
+def run_valuation(n_submit, n_demo, postal, flat_type, storey_bin, listed):  # noqa: ARG001
     # Demo short-circuit: bypass form validation and use pre-built DEMO data
     if ctx.triggered_id == "val-demo":
         return valuation_dashboard(DEMO, listing_price=DEMO_LISTING_PRICE), ""
@@ -1677,11 +1691,9 @@ def run_valuation(n_submit, n_demo, postal, flat_type, storey_bin, lease_bin, li
         return no_update, "Please select a flat type."
     if not storey_bin:
         return no_update, "Please select a storey level."
-    if not lease_bin:
-        return no_update, "Please select a remaining lease range."
 
     listed_int = int(listed) if listed else None
-    data = build_real_data(postal.strip(), flat_type, storey_bin, lease_bin)
+    data = build_real_data(postal.strip(), flat_type, storey_bin)
     if data is None:
         return no_update, "Postal code not found in our database."
     return valuation_dashboard(data, listing_price=listed_int), ""
@@ -1691,26 +1703,23 @@ def run_valuation(n_submit, n_demo, postal, flat_type, storey_bin, lease_bin, li
     Output("val-flat-type", "value"),
     Output("val-flat-type", "options"),
     Output("val-storey-bin", "value"),
-    Output("val-lease-bin", "value"),
     Input("val-postal", "value"),
     State("val-flat-type", "value"),
     State("val-storey-bin", "value"),
-    State("val-lease-bin", "value"),
     prevent_initial_call=True,
 )
-def autofill_from_postal(postal, current_ft, current_storey, current_lease):
+def autofill_from_postal(postal, current_ft, current_storey):
     all_ft_options = [{"label": ft, "value": ft} for ft in FLAT_TYPES]
     if not postal:
-        return None, all_ft_options, None, None
+        return None, all_ft_options, None
     meta = _POSTAL_META.get(str(postal).zfill(6))
     if not meta:
-        return None, all_ft_options, None, None
+        return None, all_ft_options, None
     # Only autofill fields the user hasn't already set
     return (
         meta["flat_type"] if not current_ft else current_ft,
         all_ft_options,
         meta["storey_level_bin"] if not current_storey else current_storey,
-        meta["remaining_lease_bin"] if not current_lease else current_lease,
     )
 
 

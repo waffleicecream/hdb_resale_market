@@ -496,35 +496,32 @@ def build_verdict_section(flat_labels, nearest_data, thresholds):
     ])
 
     # Proximity rating legend rows
-    _th_style = {"padding": "4px 10px 4px 0", "fontSize": "10px", "fontWeight": "700",
-                 "textTransform": "uppercase", "letterSpacing": "0.06em", "whiteSpace": "nowrap"}
+    _col_w   = "20%"  # equal width for the 4 rating columns
+    _amenity_w = "20%"
+    _th_style = {"width": _col_w, "padding": "3px 6px", "fontSize": "9px", "fontWeight": "700",
+                 "textTransform": "uppercase", "letterSpacing": "0.06em", "whiteSpace": "nowrap",
+                 "textAlign": "center"}
     legend_header = html.Tr([
-        html.Th("Amenity",      style={**_th_style, "color": "var(--color-text-secondary)", "padding": "4px 12px 4px 0"}),
-        html.Th("Exceptional",  style={**_th_style, "color": "#16A34A"}),
-        html.Th("Good",         style={**_th_style, "color": "#2563EB"}),
-        html.Th("Below Avg",    style={**_th_style, "color": "#F59E0B"}),
-        html.Th("Poor",         style={**_th_style, "color": "#DC2626"}),
+        html.Th("Amenity",     style={**_th_style, "width": _amenity_w, "color": "var(--color-text-secondary)", "textAlign": "left"}),
+        html.Th("Exceptional", style={**_th_style, "color": "#16A34A"}),
+        html.Th("Good",        style={**_th_style, "color": "#2563EB"}),
+        html.Th("Below Avg",   style={**_th_style, "color": "#F59E0B"}),
+        html.Th("Poor",        style={**_th_style, "color": "#DC2626"}),
     ])
+    _td_val = {"fontSize": "10px", "color": "var(--color-text-muted)",
+               "padding": "2px 6px", "whiteSpace": "nowrap", "textAlign": "center"}
     legend_rows = []
     for key, dlabel in AMENITY_DISPLAY_LABELS.items():
         t = thresholds.get(key, [5, 10, 15])
         legend_rows.append(html.Tr([
             html.Td(dlabel,
-                    style={"padding": "4px 12px 4px 0", "fontSize": "11px",
+                    style={"width": _amenity_w, "padding": "2px 6px 2px 0", "fontSize": "10px",
                            "color": "var(--color-text-secondary)", "fontWeight": "600",
                            "whiteSpace": "nowrap"}),
-            html.Td(f"<{t[0]} min",
-                    style={"padding": "4px 10px 4px 0", "fontSize": "10px",
-                           "color": "var(--color-text-muted)", "whiteSpace": "nowrap"}),
-            html.Td(f"{t[0]}–{t[1]} min",
-                    style={"padding": "4px 10px 4px 0", "fontSize": "10px",
-                           "color": "var(--color-text-muted)", "whiteSpace": "nowrap"}),
-            html.Td(f"{t[1]}–{t[2]} min",
-                    style={"padding": "4px 10px 4px 0", "fontSize": "10px",
-                           "color": "var(--color-text-muted)", "whiteSpace": "nowrap"}),
-            html.Td(f">{t[2]} min",
-                    style={"padding": "4px 0", "fontSize": "10px",
-                           "color": "var(--color-text-muted)", "whiteSpace": "nowrap"}),
+            html.Td(f"<{t[0]} min",        style=_td_val),
+            html.Td(f"{t[0]}–{t[1]} min",  style=_td_val),
+            html.Td(f"{t[1]}–{t[2]} min",  style=_td_val),
+            html.Td(f">{t[2]} min",         style=_td_val),
         ]))
 
     return html.Div(className="am-verdict-wrap", children=[
@@ -562,11 +559,12 @@ def build_verdict_section(flat_labels, nearest_data, thresholds):
                             "textTransform": "uppercase", "letterSpacing": "0.08em",
                             "color": "var(--color-text-muted)", "marginBottom": "12px"}),
             html.Div("Ratings are based on walking time (minutes) to the nearest amenity.",
-                     style={"fontSize": "12px", "color": "var(--color-text-secondary)",
-                            "marginBottom": "12px"}),
+                     style={"fontSize": "11px", "color": "var(--color-text-secondary)",
+                            "marginBottom": "8px"}),
             html.Table(
                 [html.Thead(legend_header), html.Tbody(legend_rows)],
-                style={"borderCollapse": "collapse", "width": "100%"},
+                style={"borderCollapse": "collapse", "width": "100%",
+                       "tableLayout": "fixed"},
             ),
         ]),
     ])
