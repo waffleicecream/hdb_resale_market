@@ -42,6 +42,28 @@ METRIC_TOOLTIPS = {
 
 DIVERGING_METRICS = {"txn_yoy_pct", "median_yoy_pct"}
 
+# ── Fixed colour-scale ranges (consistent across all flat types) ───────────────
+# Derived from p90/p95 analysis to avoid outlier dominance:
+#   txn_2025:      cap at 1,000 (p90 across flat types ~490, ALL goes to 1,920)
+#   median_2025:   $300K–$1.2M  (p95 = $1.1M; tighter than $1.5M for better contrast)
+#   txn_yoy_pct:   ±30%         (p95 = ±47%; 200% outliers are tiny-base anomalies)
+#   median_yoy_pct: −10%→+15%  (asymmetric; almost all towns in this band)
+_SCALE = {
+    "txn_2025":      (0,        1_000),
+    "median_2025":   (300_000,  1_200_000),
+    "txn_yoy_pct":   (-30.0,    30.0),
+    "median_yoy_pct":(-15.0,    15.0),
+}
+# Blue(neg)→White(0)→Red(pos), white pinned at position 0.5
+_BWR = [
+    [0.0,  "#2166AC"],
+    [0.25, "#92C5DE"],
+    [0.5,  "#F7F7F7"],
+    [0.75, "#F4A582"],
+    [0.875,"#D6604D"],
+    [1.0,  "#B2182B"],
+]
+
 DATA_TOWNS = [k for k in STATS if k not in ("national", "town_about", "town_future_developments")]
 
 _FT_BTN_IDS    = [f"ft-btn-{key.replace(' ', '-')}" for _, key in FT_BUTTONS]
@@ -61,46 +83,72 @@ def _fmt_value(val, metric):
 
 
 def make_choropleth(metric, flat_type):
-    rows = [
-        {"PLN_AREA_N": town, "value": STATS[town][flat_type][metric],
-         "town_display": town.title()}
-        for town in DATA_TOWNS
-        if STATS.get(town, {}).get(flat_type, {}).get(metric) is not None
-    ]
-    df = pd.DataFrame(rows)
+    active, zero = [], []
+    for town in DATA_TOWNS:
+        d = STATS.get(town, {}).get(flat_type, {})
+        val = d.get(metric)
+        txn = d.get("txn_2025", 0)
+        if val is None:
+            continue
+        row = {"PLN_AREA_N": town, "value": val, "town_display": town.title()}
+        (zero if txn == 0 else active).append(row)
 
-    if df.empty:
-        return go.Figure(layout=dict(margin={"r": 0, "t": 0, "l": 0, "b": 0}, paper_bgcolor="rgba(0,0,0,0)"))
+    df_active = pd.DataFrame(active)
+    df_zero   = pd.DataFrame(zero)
+    empty_layout = dict(margin={"r": 0, "t": 0, "l": 0, "b": 0}, paper_bgcolor="rgba(0,0,0,0)")
 
-    # Pre-format hover values so the template can display them as strings
-    df["value_fmt"] = df.apply(lambda r: _fmt_value(r["value"], metric), axis=1)
+    if df_active.empty and df_zero.empty:
+        return go.Figure(layout=empty_layout)
 
-    is_pct = metric in DIVERGING_METRICS
-    tick_fmt = ".1f" if is_pct else (",.0f" if metric != "txn_2025" else ",d")
-    tick_prefix = "" if is_pct else ("$" if metric != "txn_2025" else "")
-    tick_suffix = "%" if is_pct else ""
+    is_pct  = metric in DIVERGING_METRICS
+    tick_fmt    = ".1f"  if is_pct else (",.0f" if metric != "txn_2025" else ",d")
+    tick_prefix = ""     if is_pct else ("$"    if metric != "txn_2025" else "")
+    tick_suffix = "%"    if is_pct else ""
 
-    kwargs = dict(
+    scale_min, scale_max = _SCALE[metric]
+    scale_kwargs = dict(
+        color_continuous_scale=_BWR if is_pct else "YlOrRd",
+        range_color=[scale_min, scale_max],
+    )
+
+    common = dict(
         geojson=GEOJSON,
-        locations="PLN_AREA_N",
         featureidkey="properties.PLN_AREA_N",
-        color="value",
-        color_continuous_scale="RdBu_r" if is_pct else "YlOrRd",
         mapbox_style="carto-positron",
         zoom=10.2,
         center={"lat": 1.352, "lon": 103.82},
         opacity=0.75,
-        custom_data=["town_display", "value_fmt"],
     )
-    if is_pct:
-        kwargs["color_continuous_midpoint"] = 0.0
 
-    fig = px.choropleth_mapbox(df, **kwargs)
-    fig.update_traces(
-        marker_line_width=0.8,
-        marker_line_color="#fff",
-        hovertemplate="<b>%{customdata[0]}</b><br>%{customdata[1]}<extra></extra>",
-    )
+    if not df_active.empty:
+        df_active["value_fmt"] = df_active.apply(lambda r: _fmt_value(r["value"], metric), axis=1)
+        fig = px.choropleth_mapbox(
+            df_active, locations="PLN_AREA_N", color="value",
+            custom_data=["town_display", "value_fmt"],
+            **common, **scale_kwargs,
+        )
+        fig.update_traces(
+            marker_line_width=0.8, marker_line_color="#fff",
+            hovertemplate="<b>%{customdata[0]}</b><br>%{customdata[1]}<extra></extra>",
+        )
+    else:
+        fig = go.Figure(layout=empty_layout)
+
+    # Grey layer for towns with 0 transactions
+    if not df_zero.empty:
+        fig.add_trace(go.Choroplethmapbox(
+            geojson=GEOJSON,
+            featureidkey="properties.PLN_AREA_N",
+            locations=df_zero["PLN_AREA_N"].tolist(),
+            z=[0] * len(df_zero),
+            colorscale=[[0, "#CBD5E1"], [1, "#CBD5E1"]],
+            showscale=False,
+            marker_line_width=0.8, marker_line_color="#fff", marker_opacity=0.75,
+            customdata=list(zip(df_zero["town_display"], ["No transactions in 2025"] * len(df_zero))),
+            hovertemplate="<b>%{customdata[0]}</b><br>%{customdata[1]}<extra></extra>",
+            showlegend=False,
+        ))
+
     fig.update_layout(
         margin={"r": 0, "t": 0, "l": 0, "b": 0},
         paper_bgcolor="rgba(0,0,0,0)",
