@@ -461,23 +461,33 @@ def get_past_transactions(lat, lon, flat_type_ui, floor_category, street_upper_f
     return [
         {"date": r["month"], "block": str(r["block"]), "street": str(r["street_name"]),
          "floor": r["storey_range"], "flat_type": r["flat_type"], "price": int(r["resale_price"]),
+         "remaining_lease": str(r["remaining_lease"]) if pd.notna(r.get("remaining_lease")) else "—",
          "lat": float(r["lat"]) if pd.notna(r.get("lat")) else None,
          "lon": float(r["lon"]) if pd.notna(r.get("lon")) else None}
         for _, r in sub.iterrows()
     ]
 
 
-def get_current_listings(town, flat_type_ui, block=None, scope="town"):
+def get_current_listings(town, flat_type_ui, storey_bin=None, lease_bin=None, block=None, scope="town"):
     """
     Current listings filtered by scope:
       scope='town'  — same town, ordered by price (cheapest first)
       scope='block' — same block + same town, ordered by price
-    Both scopes filter on flat_type only (no floor_category filter), sorted by price_numeric.
+    Hard filters: flat_type, floor_category (storey_bin), remaining_lease_years (lease_bin).
     """
     if _ENRICHED.empty:
         return []
     ft_norm = _FT_MAP.get(flat_type_ui, flat_type_ui.upper())
     town_upper = str(town).replace(" Town", "").strip().upper()
+    fc = _STOREY_MAP.get(storey_bin, storey_bin) if storey_bin else None
+
+    _lease_bin_ranges = {
+        "Under 60 years": (0, 60),
+        "60-75 years": (60, 75),
+        "75-90 years": (75, 90),
+        "Over 90 years": (90, 200),
+    }
+    lease_range = _lease_bin_ranges.get(lease_bin) if lease_bin else None
 
     base_mask = (
         (_ENRICHED["flat_type_norm"] == ft_norm) &
@@ -485,6 +495,13 @@ def get_current_listings(town, flat_type_ui, block=None, scope="town"):
         (_ENRICHED["scrape_failed"] == False) &
         (_ENRICHED["town"].str.upper().str.replace(" TOWN", "", regex=False).str.strip() == town_upper)
     )
+    if fc:
+        base_mask &= (_ENRICHED["floor_category"] == fc)
+    if lease_range:
+        base_mask &= (
+            (_ENRICHED["remaining_lease_years"] >= lease_range[0]) &
+            (_ENRICHED["remaining_lease_years"] < lease_range[1])
+        )
     if scope == "block" and block:
         mask = base_mask & (_ENRICHED["block"].astype(str).str.upper().str.strip() == str(block).upper().strip())
     else:
@@ -547,8 +564,8 @@ def build_real_data(postal, flat_type_ui, storey_bin, lease_bin):
 
     trends, trend_source = get_nearby_trends(flat_lat, flat_lon, flat_type_ui, storey_bin, street_upper)
     txns          = get_past_transactions(flat_lat, flat_lon, flat_type_ui, storey_bin, street_upper)
-    listings_town  = get_current_listings(town, flat_type_ui, block=meta["block"], scope="town")
-    listings_block = get_current_listings(town, flat_type_ui, block=meta["block"], scope="block")
+    listings_town  = get_current_listings(town, flat_type_ui, storey_bin=storey_bin, lease_bin=lease_bin, block=meta["block"], scope="town")
+    listings_block = get_current_listings(town, flat_type_ui, storey_bin=storey_bin, lease_bin=lease_bin, block=meta["block"], scope="block")
 
     return {
         "address": f"Blk {meta['block']} {meta['street'].title()}",
@@ -831,6 +848,8 @@ def past_data_table(data):
                     style={"fontSize": "12px", "color": "var(--color-text-secondary)"}),
             html.Td(t["floor"]),
             html.Td(t["flat_type"]),
+            html.Td(t.get("remaining_lease", "—"),
+                    style={"fontSize": "12px", "color": "var(--color-text-secondary)"}),
             html.Td(f"${t['price']:,.0f}", className="td-price"),
         ]) for t in txns[:10]
     ]
@@ -844,7 +863,7 @@ def past_data_table(data):
             html.Table(className="data-table", children=[
                 html.Thead(html.Tr([
                     html.Th("MONTH"), html.Th("ADDRESS"),
-                    html.Th("STOREY"), html.Th("FLAT TYPE"), html.Th("PRICE"),
+                    html.Th("STOREY"), html.Th("FLAT TYPE"), html.Th("LEASE"), html.Th("PRICE"),
                 ])),
                 html.Tbody(rows),
             ]),
