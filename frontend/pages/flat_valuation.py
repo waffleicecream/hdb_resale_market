@@ -171,6 +171,26 @@ def _load_postal_lease():
 
 _POSTAL_LEASE = _load_postal_lease()
 
+# ── Block+street → lease_commence_date (from pipeline CSVs) ───
+def _build_block_lease_lookup():
+    out = {}
+    for path in (
+        os.path.join(_MERGED, "[FINAL]hdb_with_amenities_macro_pre2026.csv"),
+        os.path.join(_MERGED, "[FINAL]hdb_with_amenities_macro_2026.csv"),
+    ):
+        if not os.path.exists(path):
+            continue
+        df = pd.read_csv(path, usecols=["block", "street_name", "lease_commence_date"],
+                         low_memory=False)
+        df = df.dropna(subset=["lease_commence_date"])
+        df["_bk"] = df["block"].astype(str).str.upper().str.strip()
+        df["_st"] = df["street_name"].astype(str).str.upper().str.strip()
+        for _, r in df.drop_duplicates(["_bk", "_st"], keep="last").iterrows():
+            out[(r["_bk"], r["_st"])] = int(r["lease_commence_date"])
+    return out
+
+_BLOCK_LEASE = _build_block_lease_lookup()
+
 def _lease_bin_from_years(y):
     if y is None:
         return None
@@ -588,7 +608,12 @@ def build_real_data(postal, flat_type_ui, storey_bin):
     street_upper = str(meta["street"]).upper().strip()
 
     # Compute remaining lease from lease_commence_date (current year = 2026)
-    lease_commence = _POSTAL_LEASE.get(str(postal).strip().zfill(6))
+    # Try postal_lease.csv first, then block+street lookup from pipeline CSVs
+    block_upper = str(meta["block"]).upper().strip()
+    lease_commence = (
+        _POSTAL_LEASE.get(str(postal).strip().zfill(6))
+        or _BLOCK_LEASE.get((block_upper, street_upper))
+    )
     if lease_commence:
         remaining_lease_years = 99 - (2026 - int(lease_commence))
         remaining_lease = f"{remaining_lease_years} years"
@@ -695,18 +720,6 @@ def input_form(prefill=None, compact=False):
                              style={"fontSize": "14px"}),
             ]),
             html.Div(className="form-group", children=[
-                html.Label([
-                    "Remaining Lease",
-                    html.Span(" (fixed per block)", style={"fontSize": "11px", "color": "var(--color-text-muted)", "marginLeft": "6px"}),
-                ], className="form-label"),
-                dcc.Dropdown(id="val-lease-bin",
-                             options=LEASE_BINS,
-                             placeholder="Select lease range", clearable=False,
-                             value=pf.get("remaining_lease_bin"),
-                             disabled=pf.get("remaining_lease_bin") is not None,
-                             style={"fontSize": "14px"}),
-            ]),
-            html.Div(className="form-group", children=[
                 html.Label("Listed Price (optional)", className="form-label"),
                 dcc.Input(id="val-listed", type="number", min=0,
                           placeholder="e.g. 638000", className="form-input",
@@ -750,7 +763,7 @@ def market_premium_bar(listing_price, p15, p85):
     if verdict == "OVERPRICED":
         accent      = "#DC2626"
         pct_label   = f"+{pct:.1f}%"
-        sub         = f"Listed ${listing_price - p85:,} above the top of the predicted range."
+        sub         = f"Listed at ${listing_price:,}, ${listing_price - p85:,} above the top of the predicted range."
         # Colour only the overpriced segment (fv_right → pos) red; rest grey
         segments = [
             html.Div(style={"position": "absolute", "left": "0", "width": f"{fv_right}%",
@@ -765,7 +778,7 @@ def market_premium_bar(listing_price, p15, p85):
     elif verdict == "GOOD DEAL":
         accent      = "#16A34A"
         pct_label   = f"{pct:.1f}%"
-        sub         = f"Listed ${p15 - listing_price:,} below the bottom of the predicted range."
+        sub         = f"Listed at ${listing_price:,}, ${p15 - listing_price:,} below the bottom of the predicted range."
         # Colour only the underpriced segment (pos → fv_left) green; rest grey
         segments = [
             html.Div(style={"position": "absolute", "left": "0", "width": f"{pos}%",
@@ -780,7 +793,7 @@ def market_premium_bar(listing_price, p15, p85):
     else:
         accent      = "#6B7280"
         pct_label   = f"{pct:+.1f}%"
-        sub         = "Listed price falls within the predicted fair value range."
+        sub         = f"Listed at ${listing_price:,}, within the predicted range."
         segments = [
             html.Div(style={"position": "absolute", "left": "0", "width": "100%",
                             "height": "100%", "background": "#D1D5DB", "borderRadius": "4px"}),
@@ -938,8 +951,9 @@ def _txn_rows(txns, sort_col, sort_asc):
         txns = sorted(txns, key=lambda t: _txn_sort_key(t, sort_col), reverse=not sort_asc)
     rows = []
     for t in txns[:10]:
+        date_display = str(t.get("date", ""))[:7] if t.get("date") else "—"
         rows.append(html.Tr([
-            html.Td(t["date"],
+            html.Td(date_display,
                     style={"fontSize": "12px", "color": "var(--color-text-secondary)"}),
             html.Td(f"Blk {t.get('block', t.get('blk',''))} {t.get('street','').title()}",
                     style={"fontSize": "12px", "color": "var(--color-text-secondary)"}),
@@ -964,31 +978,41 @@ def past_data_table(data, sort_col=None, sort_asc=True):
     fallback = len(txns) < 3
     rows = _txn_rows(txns, sort_col, sort_asc)
 
-    header_cells = [
-        html.Th(
-            html.Button(
-                [label, html.Span(_sort_icon(col_key, sort_col, sort_asc),
-                                  style={"marginLeft": "4px", "fontSize": "10px",
-                                         "opacity": "0.7" if col_key != sort_col else "1"})],
-                id={"type": "txn-sort-col", "col": col_key},
-                n_clicks=0,
-                style={"background": "none", "border": "none", "cursor": "pointer",
-                       "fontWeight": "700", "fontSize": "11px", "letterSpacing": "0.05em",
-                       "color": "var(--color-text-muted)" if col_key != sort_col else "var(--color-primary)",
-                       "padding": "0", "display": "flex", "alignItems": "center",
-                       "gap": "2px", "whiteSpace": "nowrap"},
-            )
-        )
-        for col_key, label in _TXN_COLS
-    ]
+    header_cells = []
+    for col_key, label in _TXN_COLS:
+        if col_key == "address":
+            header_cells.append(html.Th(
+                html.Span(label, style={"fontWeight": "700", "fontSize": "11px",
+                                        "letterSpacing": "0.05em",
+                                        "color": "var(--color-text-muted)",
+                                        "whiteSpace": "nowrap"})
+            ))
+        else:
+            header_cells.append(html.Th(
+                html.Button(
+                    [label, html.Span(_sort_icon(col_key, sort_col, sort_asc),
+                                      style={"marginLeft": "4px", "fontSize": "10px",
+                                             "opacity": "0.7" if col_key != sort_col else "1"})],
+                    id={"type": "txn-sort-col", "col": col_key},
+                    n_clicks=0,
+                    style={"background": "none", "border": "none", "cursor": "pointer",
+                           "fontWeight": "700", "fontSize": "11px", "letterSpacing": "0.05em",
+                           "color": "var(--color-text-muted)" if col_key != sort_col else "var(--color-primary)",
+                           "padding": "0", "display": "flex", "alignItems": "center",
+                           "gap": "2px", "whiteSpace": "nowrap"},
+                )
+            ))
 
-    return html.Div([
+    return html.Div(style={"flex": "1", "overflow": "hidden", "display": "flex",
+                           "flexDirection": "column", "minHeight": "0"}, children=[
         html.Div(
             f"\u26a0\ufe0f Limited transactions on this street. "
             f"Showing town-level comparables for {town}.",
             className="fallback-notice",
         ) if fallback else None,
-        html.Div(className="val-txn-scroll", children=[
+        html.Div(className="val-txn-scroll",
+                 style={"flex": "1", "overflowY": "auto", "minHeight": "0"},
+                 children=[
             html.Table(className="data-table", children=[
                 html.Thead(html.Tr(header_cells)),
                 html.Tbody(id="val-txn-tbody", children=rows),
@@ -1375,7 +1399,7 @@ def listing_cards(listings, p85, scope="town"):
         html.Div(className="listings-header", children=[
             html.Div(style={"display": "flex", "justifyContent": "space-between",
                             "alignItems": "center", "marginBottom": "4px"}, children=[
-                html.P("CURRENT MARKET ALTERNATIVES", className="listings-header-title",
+                html.P("ALTERNATIVE LISTINGS", className="listings-header-title",
                        style={"margin": "0"}),
                 scope_toggle,
             ]),
@@ -1399,18 +1423,14 @@ def top_left_panel(data, listing_price=None):
     if verdict == "OVERPRICED":
         badge = html.Div("\u26a0\ufe0f OVERPRICED",
                          className="verdict-badge verdict-overpriced")
-        listed_color = "var(--color-danger)"
     elif verdict == "GOOD DEAL":
         badge = html.Div("\U0001f7e2 GOOD DEAL",
                          className="verdict-badge verdict-gooddeal")
-        listed_color = "var(--color-success)"
     elif verdict == "FAIR VALUE":
         badge = html.Div("\u2705 FAIR VALUE",
                          className="verdict-badge verdict-fairvalue")
-        listed_color = "var(--color-text-secondary)"
     else:
         badge = None
-        listed_color = None
 
     warn = lease_warning(data.get("remaining_lease_bin", ""))
 
@@ -1433,23 +1453,10 @@ def top_left_panel(data, listing_price=None):
                         "marginBottom": "4px"}),
         html.P(f"Range: ${p15:,} \u2014 ${p85:,}",
                style={"fontSize": "13px", "color": "var(--color-text-secondary)",
-                      "marginBottom": "4px"}),
-        # Listed price
-        html.P(f"Listed at ${listing_price:,}",
-               style={"fontSize": "14px", "fontWeight": "600",
-                      "color": listed_color, "marginBottom": "12px"}
-               ) if listing_price else None,
+                      "marginBottom": "12px"}),
 
         # Market premium bar
         market_premium_bar(listing_price, p15, p85),
-
-        # Placeholder model notice (shown when RF model unavailable for this address)
-        html.Div(
-            "⚠ Price range based on historical percentiles. "
-            "RF model unavailable for this address.",
-            style={"fontSize": "11px", "color": "var(--color-text-muted)",
-                   "fontStyle": "italic", "marginTop": "8px"}
-        ) if data.get("_model_note") else None,
 
         html.Div(className="divider", style={"margin": "16px 0"}),
 
@@ -1466,8 +1473,8 @@ def top_left_panel(data, listing_price=None):
                       html.P(data["flat_type"], className="flat-detail-val")]),
             html.Div([html.P("REMAINING LEASE", className="flat-detail-label"),
                       html.P(data["remaining_lease"], className="flat-detail-val")]),
-            html.Div([html.P("STOREY BIN", className="flat-detail-label"),
-                      html.P(data["storey_level_bin"], className="flat-detail-val")]),
+            html.Div([html.P("STOREY LEVEL", className="flat-detail-label"),
+                      html.P(f"{data['storey_level_bin']} floor" if data.get("storey_level_bin") else "—", className="flat-detail-val")]),
             html.Div([html.P("TOWN", className="flat-detail-label"),
                       html.P(data["town"], className="flat-detail-val")]),
         ]),
@@ -1484,12 +1491,15 @@ def top_right_panel(data, listing_price=None):
     p15 = data["projection"]["p15"]
     p85 = data["projection"]["p85"]
     trend_source = data.get("_trend_source", "same street · same flat type")
-    return html.Div(className="val-top-right card", style={"padding": "0", "overflow": "hidden"}, children=[
+    return html.Div(className="val-top-right card",
+                    style={"padding": "0", "overflow": "hidden",
+                           "display": "flex", "flexDirection": "column"}, children=[
         # Dark header
         html.Div(style={
             "background": "var(--color-navy, #1E2A3B)",
             "padding": "14px 20px",
             "borderRadius": "var(--radius) var(--radius) 0 0",
+            "flexShrink": "0",
         }, children=[
             html.H3("HISTORICAL PRICE TRENDS",
                     style={"fontSize": "13px", "fontWeight": "800",
@@ -1499,27 +1509,29 @@ def top_right_panel(data, listing_price=None):
                    style={"fontSize": "12px", "color": "rgba(255,255,255,0.6)",
                           "margin": "0"}),
         ]),
-        html.Div(style={"padding": "16px 20px"}, children=[
+        html.Div(style={"padding": "16px 20px", "flex": "1", "overflow": "hidden",
+                        "display": "flex", "flexDirection": "column", "minHeight": "0"}, children=[
             # Chart on top
             dcc.Graph(
                 figure=make_trend_chart(data.get("graph_trend", []),
                                         listing_price=listing_price,
                                         p15=p15, p85=p85),
                 config={"displayModeBar": False},
-                style={"height": "220px"},
+                style={"height": "220px", "flexShrink": "0"},
             ),
             html.P(
                 f"Average transaction price \u2014 {trend_source}",
                 style={"fontSize": "11px", "color": "var(--color-text-muted)",
                        "textAlign": "center", "marginTop": "2px", "fontStyle": "italic",
-                       "marginBottom": "16px"},
+                       "marginBottom": "16px", "flexShrink": "0"},
             ),
             # Past transactions table below (scrollable)
             html.H3("Past Transactions",
                     style={"fontSize": "15px", "fontWeight": "700",
                            "color": "var(--color-text-primary)",
                            "paddingTop": "12px", "marginBottom": "8px",
-                           "borderTop": "1px solid var(--color-border)"}),
+                           "borderTop": "1px solid var(--color-border)",
+                           "flexShrink": "0"}),
             past_data_table(data),
         ]),
     ])
@@ -1731,8 +1743,6 @@ def run_valuation(n_submit, n_demo, postal, flat_type, storey_bin, listed):  # n
         return no_update, "Please select a flat type."
     if not storey_bin:
         return no_update, "Please select a storey level."
-    if not lease_bin:
-        return no_update, "Please select a remaining lease range."
 
     listed_int = int(listed) if listed else None
     data = build_real_data(postal.strip(), flat_type, storey_bin)
@@ -1745,8 +1755,6 @@ def run_valuation(n_submit, n_demo, postal, flat_type, storey_bin, listed):  # n
     Output("val-flat-type", "value"),
     Output("val-flat-type", "options"),
     Output("val-storey-bin", "value"),
-    Output("val-lease-bin", "value"),
-    Output("val-lease-bin", "disabled"),
     Input("val-postal", "value"),
     State("val-flat-type", "value"),
     State("val-storey-bin", "value"),
@@ -1755,18 +1763,14 @@ def run_valuation(n_submit, n_demo, postal, flat_type, storey_bin, listed):  # n
 def autofill_from_postal(postal, current_ft, current_storey):
     all_ft_options = [{"label": ft, "value": ft} for ft in FLAT_TYPES]
     if not postal:
-        return None, all_ft_options, None, None, False
+        return None, all_ft_options, None
     meta = _POSTAL_META.get(str(postal).zfill(6))
     if not meta:
-        return None, all_ft_options, None, None, False
-    lease_val = meta["remaining_lease_bin"]
-    lease_locked = lease_val is not None  # lock if we have data for this block
+        return None, all_ft_options, None
     return (
         meta["flat_type"] if not current_ft else current_ft,
         all_ft_options,
         meta["storey_level_bin"] if not current_storey else current_storey,
-        lease_val if lease_val else current_lease,
-        lease_locked,
     )
 
 
@@ -1786,6 +1790,7 @@ def prefill_from_store(pathname, prefill_data):
 @callback(
     Output("val-map-layers", "data"),
     Output("val-map-graph", "figure"),
+    Output({"type": "map-layer-btn", "layer": dash.ALL}, "style"),
     Input({"type": "map-layer-btn", "layer": dash.ALL}, "n_clicks"),
     State("val-map-layers", "data"),
     State("val-data-store", "data"),
@@ -1794,7 +1799,7 @@ def prefill_from_store(pathname, prefill_data):
 def toggle_map_layer(_n, active_layers, store):  # noqa: ARG001
     from dash import ctx
     if not ctx.triggered_id or store is None:
-        return no_update, no_update
+        return no_update, no_update, no_update
     triggered_layer = ctx.triggered_id["layer"]
     active = set(active_layers or list(_DEFAULT_LAYERS))
     if triggered_layer in active:
@@ -1808,12 +1813,28 @@ def toggle_map_layer(_n, active_layers, store):  # noqa: ARG001
         active_layers=active,
         amenity_pins=_AMENITY_PINS,
     )
-    return list(active), fig
+    # Rebuild button styles in _MAP_LAYERS order (matches DOM order)
+    btn_styles = []
+    for key, _, color in _MAP_LAYERS:
+        is_active = key in active
+        btn_styles.append({
+            "display": "flex", "alignItems": "center",
+            "padding": "4px 10px", "borderRadius": "20px",
+            "border": f"1.5px solid {color}",
+            "cursor": "pointer",
+            "background": color if is_active else "white",
+            "color": "white" if is_active else color,
+            "transition": "all 0.15s",
+            "fontFamily": "var(--sans)",
+        })
+    return list(active), fig, btn_styles
 
 
 # ── Listing scope toggle callback ──────────────────────────────
 @callback(
     Output("val-listings-body", "children"),
+    Output("val-scope-block", "className"),
+    Output("val-scope-town", "className"),
     Input("val-scope-block", "n_clicks"),
     Input("val-scope-town", "n_clicks"),
     State("val-data-store", "data"),
@@ -1822,7 +1843,7 @@ def toggle_map_layer(_n, active_layers, store):  # noqa: ARG001
 def toggle_listing_scope(_n_block, _n_town, store):  # noqa: ARG001
     from dash import ctx
     if store is None:
-        return no_update
+        return no_update, no_update, no_update
     trig = ctx.triggered_id
     scope = "block" if trig == "val-scope-block" else "town"
     p85 = store.get("p85", 600000)
@@ -1831,8 +1852,7 @@ def toggle_listing_scope(_n_block, _n_town, store):  # noqa: ARG001
         if scope == "block" else
         store.get("current_listings", [])
     )
-    # Re-render just the cards list (not the full listing_cards wrapper)
-    return (
+    body = (
         html.Div(className="listings-scroll", children=[
             _listing_card(lst, p85) for lst in listings
         ]) if listings else
@@ -1840,6 +1860,9 @@ def toggle_listing_scope(_n_block, _n_town, store):  # noqa: ARG001
                style={"padding": "16px", "color": "var(--color-text-muted)",
                       "fontSize": "13px"})
     )
+    block_cls = "scope-btn" + (" scope-btn-active" if scope == "block" else "")
+    town_cls  = "scope-btn" + (" scope-btn-active" if scope == "town"  else "")
+    return body, block_cls, town_cls
 
 
 # ── Past transactions sort callback ───────────────────────────
