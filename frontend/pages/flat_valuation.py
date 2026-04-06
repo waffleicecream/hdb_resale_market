@@ -1653,7 +1653,11 @@ def overpriced_banner():
                className="overpriced-banner-title"),
         html.P([
             "Alternatives are matched on flat type, storey level, and remaining lease \u2014 "
+<<<<<<< HEAD
             "sorted by price. "
+=======
+            "sorted by price. Some may be in nearby towns. "
+>>>>>>> ry_claude
             "Note their postal codes and use the ",
             dcc.Link("Amenities Comparison", href="/amenities-comparison",
                      style={"color": "inherit", "fontWeight": "600",
