@@ -503,6 +503,18 @@ def _get_nearby_txns(lat, lon, flat_type_ui, floor_category, street_upper_fallba
         return sub, fc, f"Same street · {flat_type_ui} · {floor_category} floor"
 
 
+def _fmt_month(raw):
+    """Format a month value to 'Mon YYYY' (e.g. 'Nov 2026'). Handles YYYY-MM-DD and existing Mon YYYY."""
+    s = str(raw).strip()
+    try:
+        import datetime as _dt
+        if "-" in s:
+            return _dt.datetime.strptime(s[:7], "%Y-%m").strftime("%b %Y")
+        return s  # already formatted (e.g. demo data)
+    except Exception:
+        return s
+
+
 def get_nearby_trends(lat, lon, flat_type_ui, floor_category, street_upper_fallback):
     """Return (trend_list, source_label) aggregated from nearby txns."""
     if _PAST_TXN.empty:
@@ -526,7 +538,7 @@ def get_past_transactions(lat, lon, flat_type_ui, floor_category, street_upper_f
     sub, fc, _ = _get_nearby_txns(lat, lon, flat_type_ui, floor_category, street_upper_fallback)
     sub = sub.sort_values("month", ascending=False).head(n)
     return [
-        {"date": r["month"], "block": str(r["block"]), "street": str(r["street_name"]),
+        {"date": _fmt_month(r["month"]), "block": str(r["block"]), "street": str(r["street_name"]),
          "floor": r["storey_range"], "flat_type": r["flat_type"], "price": int(r["resale_price"]),
          "remaining_lease": str(r["remaining_lease"]) if pd.notna(r.get("remaining_lease")) else "—",
          "lat": float(r["lat"]) if pd.notna(r.get("lat")) else None,
@@ -652,6 +664,7 @@ def build_real_data(postal, flat_type_ui, storey_bin):
         "storey_level_bin": storey_bin,
         "remaining_lease_bin": lease_bin,
         "remaining_lease": remaining_lease,
+        "lease_commence_date": int(lease_commence) if lease_commence else None,
         "projection": {"p15": p15, "p85": p85},
         "graph_trend": trends,
         "_trend_source": trend_source,
@@ -951,7 +964,7 @@ def _txn_rows(txns, sort_col, sort_asc):
         txns = sorted(txns, key=lambda t: _txn_sort_key(t, sort_col), reverse=not sort_asc)
     rows = []
     for t in txns[:10]:
-        date_display = str(t.get("date", ""))[:7] if t.get("date") else "—"
+        date_display = str(t.get("date", "")) if t.get("date") else "—"
         rows.append(html.Tr([
             html.Td(date_display,
                     style={"fontSize": "12px", "color": "var(--color-text-secondary)"}),
@@ -1471,8 +1484,15 @@ def top_left_panel(data, listing_price=None):
                       html.P(data["postal_code"], className="flat-detail-val")]),
             html.Div([html.P("FLAT TYPE", className="flat-detail-label"),
                       html.P(data["flat_type"], className="flat-detail-val")]),
-            html.Div([html.P("REMAINING LEASE", className="flat-detail-label"),
-                      html.P(data["remaining_lease"], className="flat-detail-val")]),
+            html.Div([
+                html.P("LEASE COMMENCE / REMAINING", className="flat-detail-label"),
+                html.P(
+                    f"{data['lease_commence_date']} / {data['remaining_lease']}"
+                    if data.get("lease_commence_date")
+                    else data.get("remaining_lease", "—"),
+                    className="flat-detail-val"
+                ),
+            ]),
             html.Div([html.P("STOREY LEVEL", className="flat-detail-label"),
                       html.P(f"{data['storey_level_bin']} floor" if data.get("storey_level_bin") else "—", className="flat-detail-val")]),
             html.Div([html.P("TOWN", className="flat-detail-label"),
@@ -1735,7 +1755,9 @@ layout = html.Div(className="page-wrapper", id="val-page-root", children=[
 def run_valuation(n_submit, n_demo, postal, flat_type, storey_bin, listed):  # noqa: ARG001
     # Demo short-circuit: bypass form validation and use pre-built DEMO data
     if ctx.triggered_id == "val-demo":
-        return valuation_dashboard(DEMO, listing_price=DEMO_LISTING_PRICE), ""
+        with open(os.path.join(_BASE, "mock_data", "valuation_demo.json"), encoding="utf-8") as _f:
+            demo_data = json.load(_f)
+        return valuation_dashboard(demo_data, listing_price=DEMO_LISTING_PRICE), ""
 
     if not postal:
         return no_update, "Please select a postal code."
