@@ -7,11 +7,7 @@ import os
 dash.register_page(__name__, path="/amenities-comparison", name="Amenities Comparison")
 
 _BASE = os.path.dirname(os.path.dirname(__file__))
-<<<<<<< HEAD
 _MERGED = os.path.join(os.path.dirname(_BASE), "merged_data")
-=======
-_OUTPUTS = os.path.join(os.path.dirname(_BASE), "outputs")
->>>>>>> ry_claude
 
 # ── Demo data (kept for Load Demo button) ─────────────────────
 with open(os.path.join(_BASE, "mock_data", "amenities_demo.json"), encoding="utf-8") as f:
@@ -21,7 +17,6 @@ FLAT_LABELS = ["Block A", "Block B", "Block C"]
 DEMO_POSTALS = [fd["postal_code"] for fd in DEMO["flats"].values()]
 
 # ── Backend data: load once at startup ────────────────────────
-<<<<<<< HEAD
 # Build a block+street → amenity lookup from both enriched datasets
 _WALK_SPEED_MPS = 83  # metres per minute (~5 km/h)
 
@@ -74,29 +69,6 @@ _POSTAL_OPTIONS = [
     {"label": f"{p}  —  {meta['address']}, {meta['town']}", "value": p}
     for p, meta in sorted(_POSTAL_LOOKUP.items())
     if (meta["block"], meta["street"]) in _AMENITY_LOOKUP
-=======
-_WALK_SPEED_MPS = 83  # metres per minute (~5 km/h)
-
-def _load_amenities_by_postal():
-    """Return dict keyed by postal_code → row dict from amenities_by_postal.csv."""
-    path = os.path.join(_OUTPUTS, "amenities_by_postal.csv")
-    if not os.path.exists(path):
-        return {}
-    df = pd.read_csv(path, dtype={"postal_code": str}, low_memory=False)
-    df["postal_code"] = df["postal_code"].str.strip()
-    lookup = {}
-    for _, row in df.iterrows():
-        pc = row["postal_code"]
-        if pc and pc != "NIL" and pc not in lookup:
-            lookup[pc] = row.to_dict()
-    return lookup
-
-_AMENITIES = _load_amenities_by_postal()
-
-_POSTAL_OPTIONS = [
-    {"label": f"{pc}  —  {row['address']}, {row['town']}", "value": pc}
-    for pc, row in sorted(_AMENITIES.items())
->>>>>>> ry_claude
 ]
 
 
@@ -106,7 +78,6 @@ def lookup_flat_by_postal(postal):
     or (None, {}, {}) if not found.
     flat_meta matches the shape used by the UI builders.
     nearest_dict keys: mrt_station, shopping_mall, hawker_centre, polyclinic, sports_hall
-<<<<<<< HEAD
     within_dict keys: primary_schools (list of str)
     """
     meta = _POSTAL_LOOKUP.get(str(postal).strip())
@@ -117,19 +88,6 @@ def lookup_flat_by_postal(postal):
     if row is None:
         # Return address metadata but no amenity data
         return meta, {}, {}
-=======
-    within_dict keys: primary_schools (list of str), parks (list of str)
-    """
-    row = _AMENITIES.get(str(postal).strip())
-    if row is None:
-        return None, {}, {}
-
-    meta = {
-        "postal_code": postal,
-        "address": row.get("address", ""),
-        "town": row.get("town", ""),
-    }
->>>>>>> ry_claude
 
     def walk_min(dist_m):
         return max(1, round(dist_m / _WALK_SPEED_MPS))
@@ -176,21 +134,12 @@ def lookup_flat_by_postal(postal):
             "walk_min": walk_min(healthcare_dist),
         }
 
-<<<<<<< HEAD
     # Within 1km
     schools_raw = row.get("primary_schools_1km", "")
     schools = [s.strip().title() for s in str(schools_raw).split("|") if s.strip() and s.strip().lower() != "nan"]
 
     parks_raw = row.get("parks_1km", "")
     parks = [s.strip().title() for s in str(parks_raw).split("|") if s.strip() and s.strip().lower() != "nan"]
-=======
-    # Within 1km — already properly cased in amenities_by_postal.csv
-    schools_raw = row.get("primary_schools_1km", "")
-    schools = [s.strip() for s in str(schools_raw).split("|") if s.strip() and s.strip().lower() != "nan"]
-
-    parks_raw = row.get("parks_1km", "")
-    parks = [s.strip() for s in str(parks_raw).split("|") if s.strip() and s.strip().lower() != "nan"]
->>>>>>> ry_claude
 
     within = {"primary_schools": schools, "parks": parks}
 
