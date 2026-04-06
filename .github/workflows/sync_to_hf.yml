@@ -12,7 +12,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          lfs: true
+          lfs: false  # skip LFS download — saves ~490 MB bandwidth per push
 
       - name: Push to HuggingFace Space
         env:
