@@ -1,7 +1,6 @@
 {
   "flats": {
     "Flat A": {
-<<<<<<< HEAD
       "postal_code": "310058",
       "address": "Blk 58, 310058",
       "town": "Toa Payoh Central",
@@ -30,41 +29,10 @@
       "image_url": null,
       "lat": 1.3480,
       "lon": 103.7060
-=======
-      "postal_code": "460519",
-      "address": "Blk 519 Bedok Nth Ave 1",
-      "town": "Bedok",
-      "flat_type": "3-Room",
-      "demand_zone": "Established Neighbourhood",
-      "image_url": null,
-      "lat": 1.33088,
-      "lon": 103.92806
-    },
-    "Flat B": {
-      "postal_code": "460805",
-      "address": "Blk 805 Chai Chee Rd",
-      "town": "Bedok",
-      "flat_type": "5-Room",
-      "demand_zone": "Market Average",
-      "image_url": null,
-      "lat": 1.32431,
-      "lon": 103.92163
-    },
-    "Flat C": {
-      "postal_code": "460001",
-      "address": "Blk 1 Bedok Sth Ave 1",
-      "town": "Bedok",
-      "flat_type": "3-Room",
-      "demand_zone": "High Demand Zone",
-      "image_url": null,
-      "lat": 1.32085,
-      "lon": 103.93372
->>>>>>> ry_claude
     }
   },
   "nearest": {
     "Flat A": {
-<<<<<<< HEAD
       "mrt_station":   { "name": "Toa Payoh MRT",        "distance_m": 280,  "walk_min": 4  },
       "shopping_mall": { "name": "HDB Hub / Mall",        "distance_m": 320,  "walk_min": 5  },
       "hawker_centre": { "name": "Toa Payoh West Hawker", "distance_m": 150,  "walk_min": 2  },
@@ -84,32 +52,10 @@
       "hawker_centre": { "name": "Jurong West Hawker",    "distance_m": 500,  "walk_min": 7  },
       "polyclinic":    { "name": "Jurong Polyclinic",     "distance_m": 210,  "walk_min": 3  },
       "sports_hall":   { "name": "Jurong West Sports Hall","distance_m": 900,  "walk_min": 12 }
-=======
-      "mrt_station":   { "name": "Bedok Reservoir MRT",           "distance_m": 765,  "walk_min": 10 },
-      "shopping_mall": { "name": "Djitsun Mall Bedok",            "distance_m": 553,  "walk_min": 7  },
-      "hawker_centre": { "name": "Kaki Bukit 511 Mkt & Food Ctr", "distance_m": 383,  "walk_min": 5  },
-      "polyclinic":    { "name": "Bedok Polyclinic",              "distance_m": 630,  "walk_min": 8  },
-      "sports_hall":   { "name": "Heartbeat@Bedok ActiveSG",      "distance_m": 586,  "walk_min": 7  }
-    },
-    "Flat B": {
-      "mrt_station":   { "name": "Bedok MRT",                     "distance_m": 950,  "walk_min": 12 },
-      "shopping_mall": { "name": "Bedok Mall",                    "distance_m": 849,  "walk_min": 11 },
-      "hawker_centre": { "name": "Bedok Nth St 3 Blk 538",        "distance_m": 925,  "walk_min": 12 },
-      "polyclinic":    { "name": "Bedok Polyclinic",              "distance_m": 1161, "walk_min": 15 },
-      "sports_hall":   { "name": "Heartbeat@Bedok ActiveSG",      "distance_m": 1150, "walk_min": 14 }
-    },
-    "Flat C": {
-      "mrt_station":   { "name": "Bedok MRT",                     "distance_m": 530,  "walk_min": 7  },
-      "shopping_mall": { "name": "Bedok Mall",                    "distance_m": 666,  "walk_min": 8  },
-      "hawker_centre": { "name": "Bedok South Road Blk 16",       "distance_m": 199,  "walk_min": 3  },
-      "polyclinic":    { "name": "Bedok Polyclinic",              "distance_m": 676,  "walk_min": 8  },
-      "sports_hall":   { "name": "ActiveSG Sport Park @ Bedok Nth","distance_m": 699,  "walk_min": 9  }
->>>>>>> ry_claude
     }
   },
   "within_1km": {
     "Flat A": {
-<<<<<<< HEAD
       "primary_schools": ["Pei Chun Public School", "CHIJ Primary (TP)", "Kheng Cheng School"],
       "parks": ["Toa Payoh Town Park", "Toa Payoh Stadium Park"]
     },
@@ -120,18 +66,6 @@
     "Flat C": {
       "primary_schools": ["Boon Lay Garden Primary", "Rulang Primary School", "Shuqun Primary School", "Corporation Primary"],
       "parks": ["Jurong Lake Gardens", "Boon Lay Nature Park"]
-=======
-      "primary_schools": ["Damai Primary School", "Fengshan Primary School", "Red Swastika School", "Yu Neng Primary School"],
-      "parks": ["Bedok Town Park"]
-    },
-    "Flat B": {
-      "primary_schools": ["Opera Estate Primary School", "St. Stephen's School"],
-      "parks": ["Lengkong Enam Park", "Yarrow Park", "Bangsawan Park", "Aida Park", "Jalan Senang Linear Park"]
-    },
-    "Flat C": {
-      "primary_schools": ["Bedok Green Primary School"],
-      "parks": ["Aida Park", "Sennett Ave Open Space", "Sennett Ave Linear Park", "Tanah Puteh Park"]
->>>>>>> ry_claude
     }
   },
   "proximity_thresholds": {
@@ -141,9 +75,5 @@
     "polyclinic":    [500, 1000, 2000],
     "sports_hall":   [600, 1200, 2000]
   },
-<<<<<<< HEAD
   "llm_summary": "Flat A (310058) offers the superior transit-oriented lifestyle with an \"Exceptional\" proximity rating for MRT access at just 280m. While Flat C dominates in primary education density and polyclinic proximity, its current transit connectivity is limited compared to the central properties. Flat B balances retail access with strong sports and hawker convenience."
-=======
-  "llm_summary": "All three blocks sit in the Bedok estate but offer distinct trade-offs. Flat C (460001, Blk 1 Bedok Sth Ave 1) leads on connectivity — closest to Bedok MRT (EW, 530m) with a hawker centre just 199m away and good polyclinic access. Flat A (460519, Blk 519 Bedok Nth Ave 1) stands out for school choice, with four primary schools within 1km, and reasonable access to both a mall and Heartbeat@Bedok. Flat B (460805, Blk 805 Chai Chee Rd) offers the most greenery — six parks within 1km — and the largest flat type, but trades off with longer walks to the MRT, hawker centre, and polyclinic."
->>>>>>> ry_claude
 }
