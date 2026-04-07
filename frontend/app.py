@@ -58,6 +58,8 @@ def set_active_nav(pathname):
     return ["nav-link active" if pathname == href else "nav-link" for href in links]
 
 
+server = app.server  # expose Flask server for gunicorn
+
 if __name__ == "__main__":
-    app.run(debug=True, port=8050)
+    app.run(debug=False, host="0.0.0.0", port=7860)
     
