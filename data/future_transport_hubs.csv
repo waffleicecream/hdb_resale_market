@@ -1,14 +1,3 @@
-hub_name,hub_type,town,expected_year,status,notes
-Jurong East Integrated Transport Hub,Integrated Transport Hub,JURONG EAST,2027,Under construction,Also known as Jurong Gateway Hub; part of Jurong Lake District transformation
-Kallang Bus Interchange,Bus Interchange,KALLANG,,Under construction,Integrated with Kallang Horizon BTO project; no confirmed completion year
-Beauty World Integrated Transport Hub,Integrated Transport Hub,BUKIT TIMAH,2028,Under construction,Part of mixed-use Bukit V Mall development at Beauty World
-Tampines North Integrated Transport Hub,Integrated Transport Hub,TAMPINES,,Under construction,No confirmed completion year
-Woodlands North Integrated Transport Hub,Integrated Transport Hub,WOODLANDS,,Proposed,As per URA Draft Master Plan 2025
-Bishan Integrated Transport Hub,Integrated Transport Hub,BISHAN,,Proposed,As per URA Draft Master Plan 2025
-Turf City Integrated Transport Hub,Integrated Transport Hub,BUKIT TIMAH,,Proposed,As per URA Draft Master Plan 2025; verify town boundary against shapefile
-Choa Chu Kang Integrated Transport Hub,Integrated Transport Hub,CHOA CHU KANG,,Proposed,As per URA Draft Master Plan 2025
-Bedok South Integrated Transport Hub,Integrated Transport Hub,BEDOK,,Proposed,As per URA Master Plan 2019
-Hougang Central Integrated Transport Hub,Integrated Transport Hub,HOUGANG,,Proposed,As per URA Master Plan 2019
-Tampines Integrated Transport Hub,Integrated Transport Hub,TAMPINES,,Proposed,As per URA Draft Master Plan 2025
-Tiong Bahru Integrated Transport Hub,Integrated Transport Hub,BUKIT MERAH,,Proposed,As per URA Master Plan 2019
-Chencharu Bus Interchange,Bus Interchange,YISHUN,,Proposed,Serves new Chencharu residential precinct
+version https://git-lfs.github.com/spec/v1
+oid sha256:b2546f871d68cb9763f38c17434d09c330ddcc001b276dffa18ef9e5d361b43d
+size 1698

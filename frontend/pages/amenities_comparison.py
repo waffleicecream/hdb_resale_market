@@ -405,7 +405,7 @@ def build_comparison_table(flat_labels, flat_data, nearest_data, within_data, th
         for key in within_keys:
             if key == "primary_schools":
                 best_lbl = best_school_flat(flat_labels, within_data)
-                cells = [html.Td(style={"width": "160px", "verticalAlign": "top", "padding": "16px 12px"})]
+                cells = [html.Td("Pri Sch within 1km", className="am-metric-label-col", style={"width": "160px"})]
                 for lbl in flat_labels:
                     schools = within_data.get(lbl, {}).get("primary_schools", []) or []
                     cells.append(html.Td(
