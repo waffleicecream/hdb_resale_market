@@ -13,7 +13,7 @@ _MERGED = os.path.join(os.path.dirname(_BASE), "merged_data")
 with open(os.path.join(_BASE, "mock_data", "amenities_demo.json"), encoding="utf-8") as f:
     DEMO = json.load(f)
 
-FLAT_LABELS = ["Flat A", "Flat B", "Flat C"]
+FLAT_LABELS = ["Block A", "Block B", "Block C"]
 DEMO_POSTALS = [fd["postal_code"] for fd in DEMO["flats"].values()]
 
 # ── Backend data: load once at startup ────────────────────────
@@ -64,6 +64,12 @@ def _load_postal_lookup():
 
 _AMENITY_LOOKUP = _load_amenity_lookup()
 _POSTAL_LOOKUP  = _load_postal_lookup()
+
+_POSTAL_OPTIONS = [
+    {"label": f"{p}  —  {meta['address']}, {meta['town']}", "value": p}
+    for p, meta in sorted(_POSTAL_LOOKUP.items())
+    if (meta["block"], meta["street"]) in _AMENITY_LOOKUP
+]
 
 
 def lookup_flat_by_postal(postal):
@@ -132,7 +138,10 @@ def lookup_flat_by_postal(postal):
     schools_raw = row.get("primary_schools_1km", "")
     schools = [s.strip().title() for s in str(schools_raw).split("|") if s.strip() and s.strip().lower() != "nan"]
 
-    within = {"primary_schools": schools}
+    parks_raw = row.get("parks_1km", "")
+    parks = [s.strip().title() for s in str(parks_raw).split("|") if s.strip() and s.strip().lower() != "nan"]
+
+    within = {"primary_schools": schools, "parks": parks}
 
     return meta, nearest, within
 
@@ -173,9 +182,11 @@ RATING_TOOLTIP = {
 SECTION_DEFS = [
     ("🚇", "CONNECTIVITY",  "MRT & LRT Transit",  ["mrt_station"]),
     ("🛒", "RETAIL & FOOD", "Shopping & Hawkers", ["shopping_mall", "hawker_centre"]),
-    ("🏥", "WELLNESS",      "Health & Sports",     ["polyclinic", "sports_hall"]),
-    ("🎓", "EDUCATION",     "Primary Schools",     ["primary_schools"]),
+    ("🏥", "WELLNESS",      "Health & Sports",     ["polyclinic", "sports_hall", "parks"]),
+    ("🎓", "EDUCATION",     "Pri Sch within 1km",  ["primary_schools"]),
 ]
+
+WITHIN_1KM_KEYS = {"primary_schools", "parks"}
 
 
 # ── Pure helpers ───────────────────────────────────────────────
@@ -247,11 +258,36 @@ def amenity_cell_content(info, is_best, amenity_key, thresholds):
             html.Div(className=f"am-progress-fill {cls}", style={"width": f"{fill_pct}%"}),
         ]),
         html.Div(
-            f"PROXIMITY RATING: {rating}",
+            rating,
             className=f"am-rating-label {cls}",
             title=RATING_TOOLTIP.get(amenity_key, ""),
         ),
     ])
+
+
+def parks_cell_content(parks):
+    if not parks:
+        return html.Div([
+            html.Li(className="am-school-item", children=[
+                html.Span(className="am-school-dot outside"),
+                html.Span("No parks within 1km",
+                          style={"color": "var(--color-text-muted)", "fontStyle": "italic"}),
+            ])
+        ], className="am-school-list")
+
+    MAX_SHOWN = 5
+    items = [
+        html.Li(className="am-school-item", children=[
+            html.Span(className="am-school-dot within"),
+            html.Span(s),
+        ])
+        for s in parks[:MAX_SHOWN]
+    ]
+    extra = len(parks) - MAX_SHOWN
+    children = [html.Ul(items, className="am-school-list")]
+    if extra > 0:
+        children.append(html.Div(f"+ {extra} more", className="am-school-more"))
+    return html.Div(children)
 
 
 def school_cell_content(schools, is_best):
@@ -276,9 +312,6 @@ def school_cell_content(schools, is_best):
     children = [html.Ul(items, className="am-school-list")]
     if extra > 0:
         children.append(html.Div(f"+ {extra} more", className="am-school-more"))
-    if is_best:
-        children.append(html.Span("★ BEST", className="am-best-badge",
-                                   style={"marginTop": "6px", "display": "inline-block"}))
     return html.Div(children)
 
 
@@ -337,32 +370,19 @@ def build_comparison_table(flat_labels, flat_data, nearest_data, within_data, th
                 className="am-section-header-cell",
                 children=[html.Div(className="am-section-label", children=[
                     html.Span(icon, style={"fontSize": "16px"}),
-                    html.Div([
-                        html.Span(cat_title,
-                                  style={"fontSize": "10px", "color": "var(--color-accent)",
-                                         "letterSpacing": "0.1em", "fontWeight": "700",
-                                         "display": "block", "textTransform": "uppercase"}),
-                        html.Span(metric_title,
-                                  style={"fontSize": "14px", "fontWeight": "700",
-                                         "color": "var(--color-text-primary)"}),
-                    ]),
+                    html.Span(cat_title,
+                              style={"fontSize": "11px", "color": "var(--color-accent)",
+                                     "letterSpacing": "0.1em", "fontWeight": "700",
+                                     "textTransform": "uppercase"}),
                 ])],
             )],
         ))
 
-        if keys == ["primary_schools"]:
-            best_lbl = best_school_flat(flat_labels, within_data)
-            cells = [html.Td(style={"width": "160px", "verticalAlign": "top", "padding": "16px 12px"})]
-            for lbl in flat_labels:
-                schools = within_data.get(lbl, {}).get("primary_schools", []) or []
-                cells.append(html.Td(
-                    school_cell_content(schools, lbl == best_lbl),
-                    style={"padding": "16px 12px", "verticalAlign": "top",
-                           "borderLeft": "1px solid var(--color-border)"},
-                ))
-            tbody_rows.append(html.Tr(cells, className="am-metric-data-row"))
-        else:
-            for key in keys:
+        nearest_keys = [k for k in keys if k not in WITHIN_1KM_KEYS]
+        within_keys = [k for k in keys if k in WITHIN_1KM_KEYS]
+
+        if nearest_keys:
+            for key in nearest_keys:
                 best_lbl = best_distance_flat(flat_labels, nearest_data, key)
                 cells = [html.Td(
                     AMENITY_DISPLAY_LABELS.get(key, key),
@@ -377,6 +397,33 @@ def build_comparison_table(flat_labels, flat_data, nearest_data, within_data, th
                     )
                     cells.append(html.Td(
                         td_content,
+                        style={"padding": "16px 12px", "verticalAlign": "top",
+                               "borderLeft": "1px solid var(--color-border)"},
+                    ))
+                tbody_rows.append(html.Tr(cells, className="am-metric-data-row"))
+
+        for key in within_keys:
+            if key == "primary_schools":
+                best_lbl = best_school_flat(flat_labels, within_data)
+                cells = [html.Td("Pri Sch within 1km", className="am-metric-label-col", style={"width": "160px"})]
+                for lbl in flat_labels:
+                    schools = within_data.get(lbl, {}).get("primary_schools", []) or []
+                    cells.append(html.Td(
+                        school_cell_content(schools, lbl == best_lbl),
+                        style={"padding": "16px 12px", "verticalAlign": "top",
+                               "borderLeft": "1px solid var(--color-border)"},
+                    ))
+                tbody_rows.append(html.Tr(cells, className="am-metric-data-row"))
+            elif key == "parks":
+                cells = [html.Td(
+                    "Parks",
+                    className="am-metric-label-col",
+                    style={"width": "160px"},
+                )]
+                for lbl in flat_labels:
+                    parks = within_data.get(lbl, {}).get("parks", []) or []
+                    cells.append(html.Td(
+                        parks_cell_content(parks),
                         style={"padding": "16px 12px", "verticalAlign": "top",
                                "borderLeft": "1px solid var(--color-border)"},
                     ))
@@ -450,26 +497,32 @@ def build_verdict_section(flat_labels, nearest_data, thresholds):
     ])
 
     # Proximity rating legend rows
+    _col_w   = "20%"  # equal width for the 4 rating columns
+    _amenity_w = "20%"
+    _th_style = {"width": _col_w, "padding": "3px 6px", "fontSize": "9px", "fontWeight": "700",
+                 "textTransform": "uppercase", "letterSpacing": "0.06em", "whiteSpace": "nowrap",
+                 "textAlign": "center"}
+    legend_header = html.Tr([
+        html.Th("Amenity",     style={**_th_style, "width": _amenity_w, "color": "var(--color-text-secondary)", "textAlign": "left"}),
+        html.Th("Exceptional", style={**_th_style, "color": "#16A34A"}),
+        html.Th("Good",        style={**_th_style, "color": "#2563EB"}),
+        html.Th("Below Avg",   style={**_th_style, "color": "#F59E0B"}),
+        html.Th("Poor",        style={**_th_style, "color": "#DC2626"}),
+    ])
+    _td_val = {"fontSize": "10px", "color": "var(--color-text-muted)",
+               "padding": "2px 6px", "whiteSpace": "nowrap", "textAlign": "center"}
     legend_rows = []
     for key, dlabel in AMENITY_DISPLAY_LABELS.items():
         t = thresholds.get(key, [5, 10, 15])
         legend_rows.append(html.Tr([
             html.Td(dlabel,
-                    style={"padding": "4px 12px 4px 0", "fontSize": "11px",
+                    style={"width": _amenity_w, "padding": "2px 6px 2px 0", "fontSize": "10px",
                            "color": "var(--color-text-secondary)", "fontWeight": "600",
                            "whiteSpace": "nowrap"}),
-            html.Td([html.Span("Exceptional", className="am-rating-label exceptional"),
-                     html.Span(f" <{t[0]} min", style={"fontSize": "10px", "color": "var(--color-text-muted)"})],
-                    style={"padding": "4px 10px 4px 0", "whiteSpace": "nowrap"}),
-            html.Td([html.Span("Good", className="am-rating-label good"),
-                     html.Span(f" {t[0]}–{t[1]} min", style={"fontSize": "10px", "color": "var(--color-text-muted)"})],
-                    style={"padding": "4px 10px 4px 0", "whiteSpace": "nowrap"}),
-            html.Td([html.Span("Below Avg", className="am-rating-label below-average"),
-                     html.Span(f" {t[1]}–{t[2]} min", style={"fontSize": "10px", "color": "var(--color-text-muted)"})],
-                    style={"padding": "4px 10px 4px 0", "whiteSpace": "nowrap"}),
-            html.Td([html.Span("Poor", className="am-rating-label poor"),
-                     html.Span(f" >{t[2]} min", style={"fontSize": "10px", "color": "var(--color-text-muted)"})],
-                    style={"padding": "4px 0", "whiteSpace": "nowrap"}),
+            html.Td(f"<{t[0]} min",        style=_td_val),
+            html.Td(f"{t[0]}–{t[1]} min",  style=_td_val),
+            html.Td(f"{t[1]}–{t[2]} min",  style=_td_val),
+            html.Td(f">{t[2]} min",         style=_td_val),
         ]))
 
     return html.Div(className="am-verdict-wrap", children=[
@@ -507,11 +560,12 @@ def build_verdict_section(flat_labels, nearest_data, thresholds):
                             "textTransform": "uppercase", "letterSpacing": "0.08em",
                             "color": "var(--color-text-muted)", "marginBottom": "12px"}),
             html.Div("Ratings are based on walking time (minutes) to the nearest amenity.",
-                     style={"fontSize": "12px", "color": "var(--color-text-secondary)",
-                            "marginBottom": "12px"}),
+                     style={"fontSize": "11px", "color": "var(--color-text-secondary)",
+                            "marginBottom": "8px"}),
             html.Table(
-                legend_rows,
-                style={"borderCollapse": "collapse", "width": "100%"},
+                [html.Thead(legend_header), html.Tbody(legend_rows)],
+                style={"borderCollapse": "collapse", "width": "100%",
+                       "tableLayout": "fixed"},
             ),
         ]),
     ])
@@ -528,7 +582,7 @@ def empty_state():
         style={"textAlign": "center", "padding": "80px 32px", "color": "var(--color-text-muted)"},
         children=[
             html.Div("📍", style={"fontSize": "40px", "marginBottom": "12px"}),
-            html.P("Enter a postal code above and click Add Flat to begin comparing.",
+            html.P("Enter a postal code above and click Add Block to begin comparing.",
                    style={"fontSize": "15px"}),
         ],
     )
@@ -538,12 +592,10 @@ def empty_state():
 
 def build_page_header():
     return html.Div([
-        html.Div("Premium Editorial Guide", className="am-editorial-badge"),
-        html.H1("Location Intelligence Dashboard", className="am-page-title"),
+        html.H1("Amenities Comparison Tool — Block Level", className="am-page-title"),
         html.P(
-            "Analyze lifestyle proximity metrics across multiple properties. "
-            "Our institutional-grade data evaluates walkability, transport "
-            "efficiency, and essential service accessibility.",
+            "Analyze and compare amenity proximity across up to 3 HDB blocks. "
+            "Evaluate walkability, transport access, and essential services side by side.",
             className="am-page-subtitle",
         ),
     ])
@@ -551,18 +603,21 @@ def build_page_header():
 
 def build_input_bar():
     return html.Div(className="am-input-bar", children=[
-        html.Div("Compare up to 3 flats", className="am-input-bar-label"),
+        html.Div("Compare up to 3 blocks", className="am-input-bar-label"),
         html.Div(className="am-input-controls", children=[
             html.Div(className="am-postal-wrap", children=[
-                html.Span("📍", className="am-pin-icon"),
-                dcc.Input(
-                    id="postal-input", type="text", maxLength=6,
-                    placeholder="Enter postal code (e.g., 310058)...",
-                    className="am-postal-input", debounce=False, n_submit=0,
+                dcc.Dropdown(
+                    id="postal-input",
+                    options=_POSTAL_OPTIONS,
+                    placeholder="Search by postal code or address...",
+                    className="am-postal-dropdown",
+                    searchable=True,
+                    clearable=True,
+                    style={"width": "380px"},
                 ),
             ]),
             html.Div(style={"display": "flex", "gap": "8px", "alignItems": "center"}, children=[
-                html.Button("Add Flat", id="add-btn", className="btn btn-primary",
+                html.Button("Add Block", id="add-btn", className="btn btn-primary",
                             style={"padding": "9px 24px"}),
                 html.Button("Load Demo", id="demo-btn", className="btn btn-secondary",
                             style={"padding": "8px 20px", "fontSize": "13px"}),
@@ -601,7 +656,6 @@ layout = html.Div(className="page-wrapper", children=[
     Output("flats-store", "data"),
     Output("postal-input", "value"),
     Input("add-btn", "n_clicks"),
-    Input("postal-input", "n_submit"),
     Input("demo-btn", "n_clicks"),
     Input("clear-btn", "n_clicks"),
     Input({"type": "remove-flat", "index": ALL}, "n_clicks"),
@@ -609,21 +663,21 @@ layout = html.Div(className="page-wrapper", children=[
     State("flats-store", "data"),
     prevent_initial_call=True,
 )
-def update_store(n_add, n_submit, n_demo, n_clear, n_removes, postal, store):
+def update_store(n_add, n_demo, n_clear, n_removes, postal, store):
     trig = ctx.triggered_id
     if trig == "clear-btn":
-        return [], ""
+        return [], None
     if trig == "demo-btn":
-        return DEMO_POSTALS[:], ""
+        return DEMO_POSTALS[:], None
     if isinstance(trig, dict) and trig.get("type") == "remove-flat":
         return [p for p in store if p != trig["index"]], no_update
-    if trig in ("add-btn", "postal-input"):
-        if not postal or len(postal.strip()) != 6 or not postal.strip().isdigit():
+    if trig == "add-btn":
+        if not postal:
             return no_update, no_update
-        p = postal.strip()
+        p = str(postal).strip()
         if p in store or len(store) >= 3:
-            return no_update, ""
-        return store + [p], ""
+            return no_update, None
+        return store + [p], None
     return no_update, no_update
 
 

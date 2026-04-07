@@ -1,6 +1,16 @@
 import dash
 from dash import Dash, html, dcc, callback, Output, Input
 
+import numpy as np
+
+class LogToPriceWrapper:
+    def __init__(self, model):
+        self.model = model
+    
+    def predict(self, X):
+        log_pred = self.model.predict(X)
+        return np.exp(log_pred)
+
 app = Dash(
     __name__,
     use_pages=True,
@@ -19,7 +29,6 @@ def navbar():
                         html.Span("PropertyMin", className="accent"),
                         "Brothers"
                     ], className="brand-name"),
-                    html.P("买房子卖房子找我们", className="brand-slogan"),
                 ]),
             ]),
             html.Div(className="navbar-links", children=[
@@ -49,5 +58,8 @@ def set_active_nav(pathname):
     return ["nav-link active" if pathname == href else "nav-link" for href in links]
 
 
+server = app.server  # expose Flask server for gunicorn
+
 if __name__ == "__main__":
-    app.run(debug=True, port=8050)
+    app.run(debug=False, host="0.0.0.0", port=7860)
+    

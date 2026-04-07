@@ -20,13 +20,13 @@ import pandas as pd
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.dirname(_HERE)
 
-CSV_PATH  = os.path.join(_ROOT, "merged_data", "hdb_with_amenities_macro_pre2026.csv")
+CSV_PATH  = os.path.join(_ROOT, "merged_data", "[FINAL]hdb_with_amenities_macro_pre2026.csv")
 MRT_PATH  = os.path.join(_ROOT, "outputs", "future_mrt_stations_for_frontend.csv")
 HUBS_PATH = os.path.join(_ROOT, "outputs", "future_transport_hubs_for_frontend.csv")
 OUT_PATH  = os.path.join(_ROOT, "outputs", "market_stats.json")
 
 # ── Constants ─────────────────────────────────────────────────────────────────
-FLAT_TYPES  = ["3 ROOM", "4 ROOM", "5 ROOM", "EXECUTIVE"]
+FLAT_TYPES  = ["2 ROOM", "3 ROOM", "4 ROOM", "5 ROOM", "EXECUTIVE"]
 FLAT_GROUPS = ["ALL"] + FLAT_TYPES
 
 # ── Town "About" descriptions (hardcoded, one paragraph per town) ─────────────

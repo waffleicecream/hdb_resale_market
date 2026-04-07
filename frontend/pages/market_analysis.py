@@ -21,6 +21,7 @@ with open(os.path.join(_BASE, "..", "outputs", "market_stats.json"), encoding="u
 # ── Constants ──────────────────────────────────────────────────────────────────
 FT_BUTTONS = [
     ("All Flats", "ALL"),
+    ("2 Room",    "2 ROOM"),
     ("3 Room",    "3 ROOM"),
     ("4 Room",    "4 ROOM"),
     ("5 Room",    "5 ROOM"),
@@ -29,12 +30,39 @@ FT_BUTTONS = [
 
 METRIC_OPTIONS = [
     {"label": "Transaction Count",                 "value": "txn_2025"},
-    {"label": "Median Price",                      "value": "median_2025"},
+    {"label": "Average Price",                     "value": "median_2025"},
     {"label": "YoY Change in Transaction Count",   "value": "txn_yoy_pct"},
-    {"label": "YoY Change in Median Price",        "value": "median_yoy_pct"},
+    {"label": "YoY Change in Average Price",       "value": "median_yoy_pct"},
 ]
 
+METRIC_TOOLTIPS = {
+    "txn_yoy_pct":    "Refers to % change in transaction count across the 2 latest full years (from 2024 to 2025), by town",
+    "median_yoy_pct": "Refers to % change in average price across the 2 latest full years (from 2024 to 2025), by town",
+}
+
 DIVERGING_METRICS = {"txn_yoy_pct", "median_yoy_pct"}
+
+# ── Fixed colour-scale ranges (consistent across all flat types) ───────────────
+# Derived from p90/p95 analysis to avoid outlier dominance:
+#   txn_2025:      cap at 1,000 (p90 across flat types ~490, ALL goes to 1,920)
+#   median_2025:   $300K–$1.2M  (p95 = $1.1M; tighter than $1.5M for better contrast)
+#   txn_yoy_pct:   ±30%         (p95 = ±47%; 200% outliers are tiny-base anomalies)
+#   median_yoy_pct: −10%→+15%  (asymmetric; almost all towns in this band)
+_SCALE = {
+    "txn_2025":      (0,        1_000),
+    "median_2025":   (300_000,  1_200_000),
+    "txn_yoy_pct":   (-30.0,    30.0),
+    "median_yoy_pct":(-15.0,    15.0),
+}
+# Blue(neg)→White(0)→Red(pos), white pinned at position 0.5
+_BWR = [
+    [0.0,  "#2166AC"],
+    [0.25, "#92C5DE"],
+    [0.5,  "#F7F7F7"],
+    [0.75, "#F4A582"],
+    [0.875,"#D6604D"],
+    [1.0,  "#B2182B"],
+]
 
 DATA_TOWNS = [k for k in STATS if k not in ("national", "town_about", "town_future_developments")]
 
@@ -55,46 +83,72 @@ def _fmt_value(val, metric):
 
 
 def make_choropleth(metric, flat_type):
-    rows = [
-        {"PLN_AREA_N": town, "value": STATS[town][flat_type][metric],
-         "town_display": town.title()}
-        for town in DATA_TOWNS
-        if STATS.get(town, {}).get(flat_type, {}).get(metric) is not None
-    ]
-    df = pd.DataFrame(rows)
+    active, zero = [], []
+    for town in DATA_TOWNS:
+        d = STATS.get(town, {}).get(flat_type, {})
+        val = d.get(metric)
+        txn = d.get("txn_2025", 0)
+        if val is None:
+            continue
+        row = {"PLN_AREA_N": town, "value": val, "town_display": town.title()}
+        (zero if txn == 0 else active).append(row)
 
-    if df.empty:
-        return go.Figure(layout=dict(margin={"r": 0, "t": 0, "l": 0, "b": 0}, paper_bgcolor="rgba(0,0,0,0)"))
+    df_active = pd.DataFrame(active)
+    df_zero   = pd.DataFrame(zero)
+    empty_layout = dict(margin={"r": 0, "t": 0, "l": 0, "b": 0}, paper_bgcolor="rgba(0,0,0,0)")
 
-    # Pre-format hover values so the template can display them as strings
-    df["value_fmt"] = df.apply(lambda r: _fmt_value(r["value"], metric), axis=1)
+    if df_active.empty and df_zero.empty:
+        return go.Figure(layout=empty_layout)
 
-    is_pct = metric in DIVERGING_METRICS
-    tick_fmt = ".1f" if is_pct else (",.0f" if metric != "txn_2025" else ",d")
-    tick_prefix = "" if is_pct else ("$" if metric != "txn_2025" else "")
-    tick_suffix = "%" if is_pct else ""
+    is_pct  = metric in DIVERGING_METRICS
+    tick_fmt    = ".1f"  if is_pct else (",.0f" if metric != "txn_2025" else ",d")
+    tick_prefix = ""     if is_pct else ("$"    if metric != "txn_2025" else "")
+    tick_suffix = "%"    if is_pct else ""
 
-    kwargs = dict(
+    scale_min, scale_max = _SCALE[metric]
+    scale_kwargs = dict(
+        color_continuous_scale=_BWR if is_pct else "YlOrRd",
+        range_color=[scale_min, scale_max],
+    )
+
+    common = dict(
         geojson=GEOJSON,
-        locations="PLN_AREA_N",
         featureidkey="properties.PLN_AREA_N",
-        color="value",
-        color_continuous_scale="RdBu_r" if is_pct else "YlOrRd",
         mapbox_style="carto-positron",
         zoom=10.2,
         center={"lat": 1.352, "lon": 103.82},
         opacity=0.75,
-        custom_data=["town_display", "value_fmt"],
     )
-    if is_pct:
-        kwargs["color_continuous_midpoint"] = 0.0
 
-    fig = px.choropleth_mapbox(df, **kwargs)
-    fig.update_traces(
-        marker_line_width=0.8,
-        marker_line_color="#fff",
-        hovertemplate="<b>%{customdata[0]}</b><br>%{customdata[1]}<extra></extra>",
-    )
+    if not df_active.empty:
+        df_active["value_fmt"] = df_active.apply(lambda r: _fmt_value(r["value"], metric), axis=1)
+        fig = px.choropleth_mapbox(
+            df_active, locations="PLN_AREA_N", color="value",
+            custom_data=["town_display", "value_fmt"],
+            **common, **scale_kwargs,
+        )
+        fig.update_traces(
+            marker_line_width=0.8, marker_line_color="#fff",
+            hovertemplate="<b>%{customdata[0]}</b><br>%{customdata[1]}<extra></extra>",
+        )
+    else:
+        fig = go.Figure(layout=empty_layout)
+
+    # Grey layer for towns with 0 transactions
+    if not df_zero.empty:
+        fig.add_trace(go.Choroplethmapbox(
+            geojson=GEOJSON,
+            featureidkey="properties.PLN_AREA_N",
+            locations=df_zero["PLN_AREA_N"].tolist(),
+            z=[0] * len(df_zero),
+            colorscale=[[0, "#CBD5E1"], [1, "#CBD5E1"]],
+            showscale=False,
+            marker_line_width=0.8, marker_line_color="#fff", marker_opacity=0.75,
+            customdata=list(zip(df_zero["town_display"], ["No transactions in 2025"] * len(df_zero))),
+            hovertemplate="<b>%{customdata[0]}</b><br>%{customdata[1]}<extra></extra>",
+            showlegend=False,
+        ))
+
     fig.update_layout(
         margin={"r": 0, "t": 0, "l": 0, "b": 0},
         paper_bgcolor="rgba(0,0,0,0)",
@@ -192,7 +246,7 @@ def stats_panel_content(pln_area, flat_type, chart_view="monthly"):
         town_name   = "National Overview"
         about_text  = STATS.get("town_about", {}).get("NATIONAL", "")
         future_text = STATS.get("town_future_developments", {}).get("NATIONAL", "")
-        about_label = "About Singapore"
+        about_label = "About SG's HDB Resale Market"
 
     subtitle = "In the past year (2025)"
 
@@ -205,13 +259,23 @@ def stats_panel_content(pln_area, flat_type, chart_view="monthly"):
     median_yoy_abs = grp.get("median_yoy_abs", 0.0)
     median_yoy_pct = grp.get("median_yoy_pct", 0.0)
 
-    chart_title = "AVERAGE PRICE BY MONTH (2025)" if chart_view == "monthly" else "AVERAGE PRICE BY QUARTER (2025)"
+    chart_title = "AVERAGE PRICE BY MONTH" if chart_view == "monthly" else "AVERAGE PRICE BY QUARTER"
     chart_fig = make_price_chart(grp, chart_view) if grp else go.Figure()
+
+    # Concise national about text
+    if scope_key == "national":
+        about_text = (
+            "Singapore's HDB resale market covers 26 towns, with prices shaped by location, "
+            "flat type, floor level, and remaining lease. Mature central estates command significant "
+            "premiums over newer towns. Buyers include upgraders, first-timers ineligible for BTO, "
+            "and PRs — making this market a key indicator of housing affordability."
+        )
 
     return [
         html.Div(className="stats-panel-header", children=[
             html.P(town_name, className="stats-panel-town"),
-            html.P(subtitle,  className="stats-panel-region"),
+            html.P(subtitle,  className="stats-panel-region",
+                   style={"fontSize": "13px"}),
         ]),
         html.Div(className="stats-panel-body", children=[
 
@@ -220,13 +284,15 @@ def stats_panel_content(pln_area, flat_type, chart_view="monthly"):
                 html.Div(className="stats-mini-card", children=[
                     html.P("NO. OF TRANSACTIONS", className="stats-mini-label"),
                     html.P(f"{txn_2025:,}", className="stats-mini-value"),
-                    html.P([_change_span(txn_yoy_abs, txn_yoy_pct)],
+                    html.P([_change_span(txn_yoy_abs, txn_yoy_pct),
+                            html.Span(" from 2024", style={"fontSize": "11px", "color": "#9CA3AF"})],
                            style={"fontSize": "12px", "marginTop": "3px"}),
                 ]),
                 html.Div(className="stats-mini-card", children=[
-                    html.P("MEDIAN PRICE", className="stats-mini-label"),
+                    html.P("AVERAGE PRICE", className="stats-mini-label"),
                     html.P(f"${median_2025:,.0f}", className="stats-mini-value"),
-                    html.P([_change_span(median_yoy_abs, median_yoy_pct)],
+                    html.P([_change_span(median_yoy_abs, median_yoy_pct),
+                            html.Span(" from 2024", style={"fontSize": "11px", "color": "#9CA3AF"})],
                            style={"fontSize": "12px", "marginTop": "3px"}),
                 ]),
                 _txn_card("HIGHEST PRICED TRANSACTION", grp.get("highest", {})),
@@ -255,14 +321,16 @@ def stats_panel_content(pln_area, flat_type, chart_view="monthly"):
 
             # About section
             html.Div(className="town-summary-section", children=[
-                html.P(about_label, className="chart-section-label"),
+                html.P(about_label, className="chart-section-label",
+                       style={"color": "#1E293B"}),
                 html.P(about_text or "No description available.",
                        className="town-summary-text"),
             ]),
 
             # Future developments section
             html.Div(className="developments-section", children=[
-                html.P("Future Developments", className="developments-label"),
+                html.P("Future Developments", className="developments-label",
+                       style={"color": "#1E293B"}),
                 html.P(future_text or "No upcoming developments have been confirmed for this town.",
                        className="developments-text"),
             ]),
@@ -276,14 +344,21 @@ layout = html.Div(className="market-page", children=[
 
     html.Div(className="map-panel", children=[
         html.Div(className="map-controls", children=[
-            dcc.Dropdown(
-                id="map-metric",
-                options=METRIC_OPTIONS,
-                value="median_2025",
-                clearable=False,
-                className="form-select",
-                style={"width": "270px", "fontSize": "13px"},
-            ),
+            html.Div(style={"display": "flex", "alignItems": "center", "gap": "6px"}, children=[
+                dcc.Dropdown(
+                    id="map-metric",
+                    options=METRIC_OPTIONS,
+                    value="median_2025",
+                    clearable=False,
+                    className="form-select",
+                    style={"width": "330px", "fontSize": "13px"},
+                ),
+                # Info icon — shown only when a YoY metric is selected
+                html.Div(id="metric-info-wrap", className="metric-info-wrap", children=[
+                    html.Span("ℹ", className="metric-info-icon", id="metric-info-icon"),
+                    html.Div(id="metric-info-tooltip", className="metric-info-tooltip"),
+                ]),
+            ]),
             html.Div(className="flat-type-btn-group", children=[
                 html.Button(label, id=bid,
                             className="ft-btn active" if key == "ALL" else "ft-btn",
@@ -333,6 +408,18 @@ def update_ft_btn_styles(active):
 )
 def set_chart_view(*_):
     return "quarterly" if ctx.triggered_id == "chart-btn-quarterly" else "monthly"
+
+
+@callback(
+    Output("metric-info-wrap",    "style"),
+    Output("metric-info-tooltip", "children"),
+    Input("map-metric", "value"),
+)
+def update_metric_info(metric):
+    tip = METRIC_TOOLTIPS.get(metric)
+    if tip:
+        return {"display": "flex"}, tip
+    return {"display": "none"}, ""
 
 
 @callback(

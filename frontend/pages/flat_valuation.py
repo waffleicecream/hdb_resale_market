@@ -3,7 +3,7 @@ import requests
 import pandas as pd
 import numpy as np
 import dash
-from dash import html, dcc, callback, Output, Input, State, no_update
+from dash import html, dcc, callback, Output, Input, State, no_update, ctx
 import plotly.graph_objects as go
 from dotenv import load_dotenv
 
@@ -128,9 +128,76 @@ def _build_postal_meta():
                 "storey_level_bin": _storey_bin(r.get("floor_category", "")),
                 "remaining_lease_bin": _lease_bin(r.get("remaining_lease", "")),
             }
+    # For postals not in enriched (no active listing), fall back to past transactions lease data
+    if not _PAST_TXN.empty and _GEOCODE_LOOKUP:
+        # Build block+street → lease from past transactions (most recent row wins)
+        sort_col = "month" if "month" in _PAST_TXN.columns else None
+        past = _PAST_TXN.copy()
+        past["_bk"] = past["block"].astype(str).str.upper().str.strip()
+        past["_st"] = past["street_name"].astype(str).str.upper().str.strip()
+        if sort_col:
+            past = past.sort_values(sort_col, ascending=False)
+        past_lease_map = (
+            past.drop_duplicates(["_bk", "_st"], keep="first")
+            .set_index(["_bk", "_st"])["remaining_lease"]
+            .to_dict()
+        )
+        for postal, g in _GEOCODE_LOOKUP.items():
+            p = str(postal).zfill(6)
+            if p in out:
+                continue
+            bk_up = str(g["block"]).upper().strip()
+            st_up = str(g["street"]).upper().strip()
+            lease = past_lease_map.get((bk_up, st_up))
+            if lease is None:
+                continue
+            out[p] = {
+                "flat_type": None,
+                "storey_level_bin": None,
+                "remaining_lease_bin": _lease_bin(lease),
+            }
     return out
 
 _POSTAL_META = _build_postal_meta()
+
+# ── Postal → lease_commence_date lookup ────────────────────────
+def _load_postal_lease():
+    path = os.path.join(_DATA, "postal_lease.csv")
+    if not os.path.exists(path):
+        return {}
+    df = pd.read_csv(path, dtype={"postal_code": str})
+    df["postal_code"] = df["postal_code"].str.zfill(6)
+    return dict(zip(df["postal_code"], df["lease_commence_date"].astype(int)))
+
+_POSTAL_LEASE = _load_postal_lease()
+
+# ── Block+street → lease_commence_date (from pipeline CSVs) ───
+def _build_block_lease_lookup():
+    out = {}
+    for path in (
+        os.path.join(_MERGED, "[FINAL]hdb_with_amenities_macro_pre2026.csv"),
+        os.path.join(_MERGED, "[FINAL]hdb_with_amenities_macro_2026.csv"),
+    ):
+        if not os.path.exists(path):
+            continue
+        df = pd.read_csv(path, usecols=["block", "street_name", "lease_commence_date"],
+                         low_memory=False)
+        df = df.dropna(subset=["lease_commence_date"])
+        df["_bk"] = df["block"].astype(str).str.upper().str.strip()
+        df["_st"] = df["street_name"].astype(str).str.upper().str.strip()
+        for _, r in df.drop_duplicates(["_bk", "_st"], keep="last").iterrows():
+            out[(r["_bk"], r["_st"])] = int(r["lease_commence_date"])
+    return out
+
+_BLOCK_LEASE = _build_block_lease_lookup()
+
+def _lease_bin_from_years(y):
+    if y is None:
+        return None
+    if y < 60:  return "Under 60 years"
+    if y < 75:  return "60-75 years"
+    if y < 90:  return "75-90 years"
+    return "Over 90 years"
 
 # UI flat_type ("4-Room") → data flat_type ("4 ROOM")
 _FT_MAP = {
@@ -210,44 +277,60 @@ def _load_amenity_pins():
 
 _AMENITY_PINS = _load_amenity_pins()
 
-# ── OLS model loaded once at startup ──────────────────────────
-_OLS_MODEL  = None
-_OLS_SCALER = None
-_OLS_COLS   = None
+# ── RF model loaded once at startup ───────────────────────────
+_RF_MODEL   = None
+_RF_ENCODER = None
+_RF_COLS    = None
+_RF_Q_LOW   = None
+_RF_Q_HIGH  = None
 
 try:
-    import joblib
-    import statsmodels.api as _sm
+    import joblib as _joblib
+    from huggingface_hub import hf_hub_download as _hf_hub_download
 
-    _MODEL_DIR = os.path.join(_BACKEND, "price_model")
+    _MODEL_DIR  = os.path.join(_BACKEND, "price_model")
+    _HF_REPO_ID = "xiulii/dse3101-rf-model"
+
+    # Auto-download rf_model.pkl from HuggingFace if not present locally (1.3 GB, too large for GitHub)
+    _rf_model_path = os.path.join(_MODEL_DIR, "rf_model.pkl")
+    if not os.path.exists(_rf_model_path):
+        print("[flat_valuation] rf_model.pkl not found locally — downloading from HuggingFace...")
+        _rf_model_path = _hf_hub_download(repo_id=_HF_REPO_ID, filename="rf_model.pkl",
+                                           local_dir=_MODEL_DIR)
+        print("[flat_valuation] Download complete.")
+
     if all(os.path.exists(os.path.join(_MODEL_DIR, f))
-           for f in ("ols_model.pkl", "ols_scaler.joblib", "ols_feature_cols.json")):
-        _OLS_MODEL  = _sm.load(os.path.join(_MODEL_DIR, "ols_model.pkl"))
-        _OLS_SCALER = joblib.load(os.path.join(_MODEL_DIR, "ols_scaler.joblib"))
-        with open(os.path.join(_MODEL_DIR, "ols_feature_cols.json")) as _f:
-            _OLS_COLS = json.load(_f)
+           for f in ("rf_encoder.pkl", "rf_feature_cols.pkl", "rf_conformal_quantiles.json")):
+        _RF_MODEL   = _joblib.load(_rf_model_path)
+        _RF_ENCODER = _joblib.load(os.path.join(_MODEL_DIR, "rf_encoder.pkl"))
+        _RF_COLS    = _joblib.load(os.path.join(_MODEL_DIR, "rf_feature_cols.pkl"))
+        with open(os.path.join(_MODEL_DIR, "rf_conformal_quantiles.json")) as _f:
+            _q = json.load(_f)
+            _RF_Q_LOW, _RF_Q_HIGH = _q["q_low"], _q["q_high"]
+        print("[flat_valuation] RF model loaded OK")
 except Exception as _e:
-    print(f"[flat_valuation] OLS model not loaded: {_e}")
+    print(f"[flat_valuation] RF model not loaded: {_e}")
 
 # Amenity lookup: (block_upper, street_upper) → amenity feature dict
 # Built from pipeline CSVs (2026 wins over pre-2026 on duplicate block+street)
-_OLS_CONTINUOUS = [
+_RF_CONTINUOUS = [
     "remaining_lease_years", "nearest_train_dist_m", "dist_nearest_hawker_m",
     "dist_nearest_primary_m", "num_primary_1km", "dist_nearest_park_m",
-    "dist_nearest_sportsg_m", "dist_nearest_mall_m", "dist_nearest_healthcare_m",
-    "num_parks_1km",
+    "num_parks_1km", "dist_nearest_sportsg_m", "dist_nearest_mall_m",
+    "dist_nearest_healthcare_m", "dist_cbd_m",
 ]
+_RF_CATEGORICAL = ["flat_type", "town", "floor_category"]
 
 def _build_amenity_lookup():
     lookup = {}
+    load_cols = ["block", "street_name", "town"] + _RF_CONTINUOUS
     for path in (
         os.path.join(_MERGED, "[FINAL]hdb_with_amenities_macro_pre2026.csv"),
         os.path.join(_MERGED, "[FINAL]hdb_with_amenities_macro_2026.csv"),
     ):
         if not os.path.exists(path):
             continue
-        df = pd.read_csv(path, usecols=["block", "street_name", "town"] + _OLS_CONTINUOUS,
-                         low_memory=False)
+        df = pd.read_csv(path, usecols=load_cols, low_memory=False)
         df["_bk"] = df["block"].astype(str).str.upper().str.strip()
         df["_st"] = df["street_name"].astype(str).str.upper().str.strip()
         for _, r in df.drop_duplicates(subset=["_bk", "_st"], keep="last").iterrows():
@@ -257,12 +340,12 @@ def _build_amenity_lookup():
 _AMENITY_LOOKUP = _build_amenity_lookup()
 
 
-def get_ols_prediction(block, street_upper, town, flat_type_ui, floor_category, remaining_lease_years):
+def get_rf_prediction(block, street_upper, town, flat_type_ui, floor_category, remaining_lease_years):
     """
-    Run OLS model using pre-computed amenity features from pipeline CSVs.
-    Returns (p_low, median, p_high) at 80% PI, or None if unavailable.
+    Run RF model using pre-computed amenity features from pipeline CSVs.
+    Returns (p_low, median, p_high) using conformal prediction intervals, or None if unavailable.
     """
-    if _OLS_MODEL is None or remaining_lease_years is None:
+    if _RF_MODEL is None or remaining_lease_years is None:
         return None
 
     amenity_row = _AMENITY_LOOKUP.get(
@@ -275,31 +358,23 @@ def get_ols_prediction(block, street_upper, town, flat_type_ui, floor_category, 
     fc = _STOREY_MAP.get(floor_category, floor_category)
 
     try:
-        features = {c: amenity_row[c] for c in _OLS_CONTINUOUS}
-        features["remaining_lease_years"] = remaining_lease_years
+        cont = {c: amenity_row[c] for c in _RF_CONTINUOUS}
+        cont["remaining_lease_years"] = remaining_lease_years
 
-        cont_vals   = np.array([[features[c] for c in _OLS_CONTINUOUS]])
-        cont_scaled = _OLS_SCALER.transform(cont_vals)
-        cont_df     = pd.DataFrame(cont_scaled, columns=_OLS_CONTINUOUS)
+        row = {c: cont[c] for c in _RF_CONTINUOUS}
+        row["flat_type"]      = ft
+        row["town"]           = str(town).upper().strip()
+        row["floor_category"] = fc
 
-        dummy_cols = [c for c in _OLS_COLS if c not in _OLS_CONTINUOUS]
-        row = {col: 0 for col in dummy_cols}
-        flat_col  = f"flat_type_{ft}"
-        town_col  = f"town_{str(town).upper().strip().replace(' TOWN', '')}"
-        floor_col = f"floor_category_{fc}"
-        if flat_col  in row: row[flat_col]  = 1
-        if town_col  in row: row[town_col]  = 1
-        if floor_col in row: row[floor_col] = 1
+        X = pd.DataFrame([row])[_RF_COLS]
+        X[_RF_CATEGORICAL] = _RF_ENCODER.transform(X[_RF_CATEGORICAL])
+        X = X.astype(float)
 
-        import statsmodels.api as sm
-        X_new       = pd.concat([cont_df, pd.DataFrame([row])], axis=1)[_OLS_COLS]
-        X_new_const = sm.add_constant(X_new, has_constant="add")
-        pred  = _OLS_MODEL.get_prediction(X_new_const)
-        frame = pred.summary_frame(alpha=0.2)  # 80% PI
+        point = float(np.exp(_RF_MODEL.predict(X)[0]))
         return (
-            int(np.exp(frame["obs_ci_lower"].values[0])),
-            int(np.exp(frame["mean"].values[0])),
-            int(np.exp(frame["obs_ci_upper"].values[0])),
+            int(point + _RF_Q_LOW),
+            int(point),
+            int(point + _RF_Q_HIGH),
         )
     except Exception:
         return None
@@ -398,20 +473,46 @@ def _get_nearby_txns(lat, lon, flat_type_ui, floor_category, street_upper_fallba
     if lat is not None and lon is not None:
         for radius in (200, 500):
             mask = _nearby_txn_mask(lat, lon, radius)
+            sub = _PAST_TXN[mask & (_PAST_TXN["flat_type"] == ft) & (_PAST_TXN["floor_category"] == fc)]
+            if len(sub) >= 5:
+                label = f"Within {radius}m of your flat · {flat_type_ui} · {floor_category} floor"
+                return sub, fc, label
+        # Widen: drop floor filter if not enough results
+        for radius in (200, 500):
+            mask = _nearby_txn_mask(lat, lon, radius)
             sub = _PAST_TXN[mask & (_PAST_TXN["flat_type"] == ft)]
             if len(sub) >= 5:
-                label = f"{radius}m radius · same flat type"
+                label = f"Within {radius}m of your flat · {flat_type_ui} · all floors"
                 return sub, fc, label
-        # Use 500m result even if < 5
-        label = "500m radius · same flat type"
+        # Use 500m flat type result even if < 5
+        label = f"Within 500m of your flat · {flat_type_ui} · all floors"
         return sub, fc, label
     else:
-        # Fallback: street name
+        # Fallback: street name + floor
         sub = _PAST_TXN[
             (_PAST_TXN["street_upper"] == street_upper_fallback) &
-            (_PAST_TXN["flat_type"] == ft)
+            (_PAST_TXN["flat_type"] == ft) &
+            (_PAST_TXN["floor_category"] == fc)
         ]
-        return sub, fc, "same street · same flat type"
+        if len(sub) < 5:
+            sub = _PAST_TXN[
+                (_PAST_TXN["street_upper"] == street_upper_fallback) &
+                (_PAST_TXN["flat_type"] == ft)
+            ]
+            return sub, fc, f"Same street · {flat_type_ui}"
+        return sub, fc, f"Same street · {flat_type_ui} · {floor_category} floor"
+
+
+def _fmt_month(raw):
+    """Format a month value to 'Mon YYYY' (e.g. 'Nov 2026'). Handles YYYY-MM-DD and existing Mon YYYY."""
+    s = str(raw).strip()
+    try:
+        import datetime as _dt
+        if "-" in s:
+            return _dt.datetime.strptime(s[:7], "%Y-%m").strftime("%b %Y")
+        return s  # already formatted (e.g. demo data)
+    except Exception:
+        return s
 
 
 def get_nearby_trends(lat, lon, flat_type_ui, floor_category, street_upper_fallback):
@@ -437,25 +538,35 @@ def get_past_transactions(lat, lon, flat_type_ui, floor_category, street_upper_f
     sub, fc, _ = _get_nearby_txns(lat, lon, flat_type_ui, floor_category, street_upper_fallback)
     sub = sub.sort_values("month", ascending=False).head(n)
     return [
-        {"date": r["month"], "block": str(r["block"]), "street": str(r["street_name"]),
+        {"date": _fmt_month(r["month"]), "block": str(r["block"]), "street": str(r["street_name"]),
          "floor": r["storey_range"], "flat_type": r["flat_type"], "price": int(r["resale_price"]),
+         "remaining_lease": str(r["remaining_lease"]) if pd.notna(r.get("remaining_lease")) else "—",
          "lat": float(r["lat"]) if pd.notna(r.get("lat")) else None,
          "lon": float(r["lon"]) if pd.notna(r.get("lon")) else None}
         for _, r in sub.iterrows()
     ]
 
 
-def get_current_listings(town, flat_type_ui, block=None, scope="town"):
+def get_current_listings(town, flat_type_ui, storey_bin=None, lease_bin=None, block=None, scope="town"):
     """
     Current listings filtered by scope:
       scope='town'  — same town, ordered by price (cheapest first)
       scope='block' — same block + same town, ordered by price
-    Both scopes filter on flat_type only (no floor_category filter), sorted by price_numeric.
+    Hard filters: flat_type, floor_category (storey_bin), remaining_lease_years (lease_bin).
     """
     if _ENRICHED.empty:
         return []
     ft_norm = _FT_MAP.get(flat_type_ui, flat_type_ui.upper())
     town_upper = str(town).replace(" Town", "").strip().upper()
+    fc = _STOREY_MAP.get(storey_bin, storey_bin) if storey_bin else None
+
+    _lease_bin_ranges = {
+        "Under 60 years": (0, 60),
+        "60-75 years": (60, 75),
+        "75-90 years": (75, 90),
+        "Over 90 years": (90, 200),
+    }
+    lease_range = _lease_bin_ranges.get(lease_bin) if lease_bin else None
 
     base_mask = (
         (_ENRICHED["flat_type_norm"] == ft_norm) &
@@ -463,6 +574,13 @@ def get_current_listings(town, flat_type_ui, block=None, scope="town"):
         (_ENRICHED["scrape_failed"] == False) &
         (_ENRICHED["town"].str.upper().str.replace(" TOWN", "", regex=False).str.strip() == town_upper)
     )
+    if fc:
+        base_mask &= (_ENRICHED["floor_category"] == fc)
+    if lease_range:
+        base_mask &= (
+            (_ENRICHED["remaining_lease_years"] >= lease_range[0]) &
+            (_ENRICHED["remaining_lease_years"] < lease_range[1])
+        )
     if scope == "block" and block:
         mask = base_mask & (_ENRICHED["block"].astype(str).str.upper().str.strip() == str(block).upper().strip())
     else:
@@ -489,7 +607,7 @@ def get_current_listings(town, flat_type_ui, block=None, scope="town"):
     return listings
 
 
-def build_real_data(postal, flat_type_ui, storey_bin, lease_bin):
+def build_real_data(postal, flat_type_ui, storey_bin):
     """
     Build the data dict consumed by valuation_dashboard().
     Returns None if postal code not found.
@@ -500,24 +618,28 @@ def build_real_data(postal, flat_type_ui, storey_bin, lease_bin):
 
     town = str(meta.get("town", "")).replace(" Town", "").strip().upper()
     street_upper = str(meta["street"]).upper().strip()
-    remaining_lease = str(meta.get("remaining_lease", "")) if meta.get("remaining_lease") else lease_bin
 
-    # Use actual remaining_lease_years if available, else midpoint of the user's lease bin
-    _lease_bin_midpoints = {
-        "Under 60 years": 55.0, "60-75 years": 67.5,
-        "75-90 years": 82.5,    "Over 90 years": 95.0,
-    }
-    if pd.notna(meta.get("remaining_lease_years")):
-        remaining_lease_years = float(meta["remaining_lease_years"])
+    # Compute remaining lease from lease_commence_date (current year = 2026)
+    # Try postal_lease.csv first, then block+street lookup from pipeline CSVs
+    block_upper = str(meta["block"]).upper().strip()
+    lease_commence = (
+        _POSTAL_LEASE.get(str(postal).strip().zfill(6))
+        or _BLOCK_LEASE.get((block_upper, street_upper))
+    )
+    if lease_commence:
+        remaining_lease_years = 99 - (2026 - int(lease_commence))
+        remaining_lease = f"{remaining_lease_years} years"
     else:
-        remaining_lease_years = _lease_bin_midpoints.get(lease_bin)
+        remaining_lease_years = None
+        remaining_lease = str(meta.get("remaining_lease", "")) or "—"
+    lease_bin = _lease_bin_from_years(remaining_lease_years)
 
-    # Try OLS model first; fall back to historical percentile placeholder
-    prediction = get_ols_prediction(meta["block"], street_upper, town, flat_type_ui, storey_bin, remaining_lease_years)
+    # Try RF model first; fall back to historical percentile placeholder
+    prediction = get_rf_prediction(meta["block"], street_upper, town, flat_type_ui, storey_bin, remaining_lease_years)
     model_note = None
     if prediction is None:
         prediction = get_placeholder_prediction(town, flat_type_ui, storey_bin)
-        model_note = "Placeholder: historical percentile. OLS model unavailable for this address."
+        model_note = "Placeholder: historical percentile. RF model unavailable for this address."
     if prediction is None:
         prediction = (400000, 500000, 600000)  # absolute fallback
         model_note = "Placeholder: default range. No data available for this address."
@@ -528,8 +650,8 @@ def build_real_data(postal, flat_type_ui, storey_bin, lease_bin):
 
     trends, trend_source = get_nearby_trends(flat_lat, flat_lon, flat_type_ui, storey_bin, street_upper)
     txns          = get_past_transactions(flat_lat, flat_lon, flat_type_ui, storey_bin, street_upper)
-    listings_town  = get_current_listings(town, flat_type_ui, block=meta["block"], scope="town")
-    listings_block = get_current_listings(town, flat_type_ui, block=meta["block"], scope="block")
+    listings_town  = get_current_listings(town, flat_type_ui, storey_bin=storey_bin, lease_bin=lease_bin, block=meta["block"], scope="town")
+    listings_block = get_current_listings(town, flat_type_ui, storey_bin=storey_bin, lease_bin=lease_bin, block=meta["block"], scope="block")
 
     return {
         "address": f"Blk {meta['block']} {meta['street'].title()}",
@@ -541,7 +663,8 @@ def build_real_data(postal, flat_type_ui, storey_bin, lease_bin):
         "flat_type": flat_type_ui,
         "storey_level_bin": storey_bin,
         "remaining_lease_bin": lease_bin,
-        "remaining_lease": remaining_lease or lease_bin,
+        "remaining_lease": remaining_lease,
+        "lease_commence_date": int(lease_commence) if lease_commence else None,
         "projection": {"p15": p15, "p85": p85},
         "graph_trend": trends,
         "_trend_source": trend_source,
@@ -564,7 +687,7 @@ LEASE_BINS = [
     {"label": "Over 90 years", "value": "Over 90 years"},
 ]
 
-DEMO_LISTING_PRICE = 650000  # above p85=598000 — showcases OVERPRICED state
+DEMO_LISTING_PRICE = 1258000  # Blk 87 Dawson Rd, QS — above RF p85=1,155,249 by ~$103k (+8.9%)
 
 
 # ── Verdict logic ──────────────────────────────────────────────
@@ -610,20 +733,15 @@ def input_form(prefill=None, compact=False):
                              style={"fontSize": "14px"}),
             ]),
             html.Div(className="form-group", children=[
-                html.Label("Remaining Lease", className="form-label"),
-                dcc.Dropdown(id="val-lease-bin",
-                             options=LEASE_BINS,
-                             placeholder="Select lease range", clearable=False,
-                             value=pf.get("remaining_lease_bin"),
-                             style={"fontSize": "14px"}),
-            ]),
-            html.Div(className="form-group", children=[
                 html.Label("Listed Price (optional)", className="form-label"),
                 dcc.Input(id="val-listed", type="number", min=0,
                           placeholder="e.g. 638000", className="form-input",
+                          value=pf.get("listed_price"),
                           debounce=True),
             ]),
-            html.Div(className="form-group val-submit-col", children=[
+            html.Div(className="form-group val-submit-col",
+                     style={"gridColumn": "1 / -1"} if not compact else {},
+                     children=[
                 html.P(id="val-error",
                        style={"color": "var(--color-danger)", "fontSize": "12px",
                               "minHeight": "16px", "marginBottom": "4px"}),
@@ -658,7 +776,7 @@ def market_premium_bar(listing_price, p15, p85):
     if verdict == "OVERPRICED":
         accent      = "#DC2626"
         pct_label   = f"+{pct:.1f}%"
-        sub         = f"Listed ${listing_price - p85:,} above the top of the predicted range."
+        sub         = f"Listed at ${listing_price:,}, ${listing_price - p85:,} above the top of the predicted range."
         # Colour only the overpriced segment (fv_right → pos) red; rest grey
         segments = [
             html.Div(style={"position": "absolute", "left": "0", "width": f"{fv_right}%",
@@ -673,7 +791,7 @@ def market_premium_bar(listing_price, p15, p85):
     elif verdict == "GOOD DEAL":
         accent      = "#16A34A"
         pct_label   = f"{pct:.1f}%"
-        sub         = f"Listed ${p15 - listing_price:,} below the bottom of the predicted range."
+        sub         = f"Listed at ${listing_price:,}, ${p15 - listing_price:,} below the bottom of the predicted range."
         # Colour only the underpriced segment (pos → fv_left) green; rest grey
         segments = [
             html.Div(style={"position": "absolute", "left": "0", "width": f"{pos}%",
@@ -688,7 +806,7 @@ def market_premium_bar(listing_price, p15, p85):
     else:
         accent      = "#6B7280"
         pct_label   = f"{pct:+.1f}%"
-        sub         = "Listed price falls within the predicted fair value range."
+        sub         = f"Listed at ${listing_price:,}, within the predicted range."
         segments = [
             html.Div(style={"position": "absolute", "left": "0", "width": "100%",
                             "height": "100%", "background": "#D1D5DB", "borderRadius": "4px"}),
@@ -799,39 +917,122 @@ def make_trend_chart(trend_data, listing_price=None, p15=None, p85=None):
     return fig
 
 
-# ── Past transactions table (scrollable) ──────────────────────
-def past_data_table(data):
-    txns = data.get("past_transactions", [])
-    town = data.get("town", "this area")
-    fallback = len(txns) < 3
-    rows = [
-        html.Tr([
-            html.Td(t["date"],
+# ── Past transactions table (scrollable, sortable) ────────────
+_TXN_COLS = [
+    ("date",             "MONTH"),
+    ("address",          "ADDRESS"),
+    ("floor",            "STOREY"),
+    ("flat_type",        "FLAT TYPE"),
+    ("remaining_lease",  "LEASE"),
+    ("price",            "PRICE"),
+]
+
+
+def _txn_sort_key(txn, col):
+    """Return a sortable value for a transaction dict by column key."""
+    import re as _re
+    if col == "date":
+        try:
+            import datetime as _dt
+            return _dt.datetime.strptime(txn.get("date", "Jan 2000"), "%b %Y")
+        except Exception:
+            return txn.get("date", "")
+    elif col == "address":
+        blk = txn.get("block", txn.get("blk", ""))
+        return f"{txn.get('street', '')} {blk}".upper()
+    elif col == "floor":
+        m = _re.search(r"\d+", str(txn.get("floor", "0")))
+        return int(m.group()) if m else 0
+    elif col == "flat_type":
+        return str(txn.get("flat_type", "")).upper()
+    elif col == "remaining_lease":
+        raw = str(txn.get("remaining_lease", "—"))
+        if raw in ("—", "", "nan"):
+            return -1.0
+        m = _re.search(r"(\d+)\s+year", raw)
+        mo = _re.search(r"(\d+)\s+month", raw)
+        years = int(m.group(1)) if m else 0
+        months = int(mo.group(1)) if mo else 0
+        return years + months / 12.0
+    elif col == "price":
+        return txn.get("price", 0)
+    return ""
+
+
+def _txn_rows(txns, sort_col, sort_asc):
+    if sort_col:
+        txns = sorted(txns, key=lambda t: _txn_sort_key(t, sort_col), reverse=not sort_asc)
+    rows = []
+    for t in txns[:10]:
+        date_display = str(t.get("date", "")) if t.get("date") else "—"
+        rows.append(html.Tr([
+            html.Td(date_display,
                     style={"fontSize": "12px", "color": "var(--color-text-secondary)"}),
             html.Td(f"Blk {t.get('block', t.get('blk',''))} {t.get('street','').title()}",
                     style={"fontSize": "12px", "color": "var(--color-text-secondary)"}),
             html.Td(t["floor"]),
             html.Td(t["flat_type"]),
+            html.Td(t.get("remaining_lease", "—"),
+                    style={"fontSize": "12px", "color": "var(--color-text-secondary)"}),
             html.Td(f"${t['price']:,.0f}", className="td-price"),
-        ]) for t in txns[:10]
-    ]
-    return html.Div([
+        ]))
+    return rows
+
+
+def _sort_icon(col, sort_col, sort_asc):
+    if col != sort_col:
+        return "\u21c5"   # ⇅
+    return "\u2191" if sort_asc else "\u2193"  # ↑ / ↓
+
+
+def past_data_table(data, sort_col=None, sort_asc=True):
+    txns = data.get("past_transactions", [])
+    town = data.get("town", "this area")
+    fallback = len(txns) < 3
+    rows = _txn_rows(txns, sort_col, sort_asc)
+
+    header_cells = []
+    for col_key, label in _TXN_COLS:
+        if col_key == "address":
+            header_cells.append(html.Th(
+                html.Span(label, style={"fontWeight": "700", "fontSize": "11px",
+                                        "letterSpacing": "0.05em",
+                                        "color": "var(--color-text-muted)",
+                                        "whiteSpace": "nowrap"})
+            ))
+        else:
+            header_cells.append(html.Th(
+                html.Button(
+                    [label, html.Span(_sort_icon(col_key, sort_col, sort_asc),
+                                      style={"marginLeft": "4px", "fontSize": "10px",
+                                             "opacity": "0.7" if col_key != sort_col else "1"})],
+                    id={"type": "txn-sort-col", "col": col_key},
+                    n_clicks=0,
+                    style={"background": "none", "border": "none", "cursor": "pointer",
+                           "fontWeight": "700", "fontSize": "11px", "letterSpacing": "0.05em",
+                           "color": "var(--color-text-muted)" if col_key != sort_col else "var(--color-primary)",
+                           "padding": "0", "display": "flex", "alignItems": "center",
+                           "gap": "2px", "whiteSpace": "nowrap"},
+                )
+            ))
+
+    return html.Div(style={"flex": "1", "overflow": "hidden", "display": "flex",
+                           "flexDirection": "column", "minHeight": "0"}, children=[
         html.Div(
             f"\u26a0\ufe0f Limited transactions on this street. "
             f"Showing town-level comparables for {town}.",
             className="fallback-notice",
         ) if fallback else None,
-        html.Div(className="val-txn-scroll", children=[
+        html.Div(className="val-txn-scroll",
+                 style={"flex": "1", "overflowY": "auto", "minHeight": "0"},
+                 children=[
             html.Table(className="data-table", children=[
-                html.Thead(html.Tr([
-                    html.Th("MONTH"), html.Th("ADDRESS"),
-                    html.Th("STOREY"), html.Th("FLAT TYPE"), html.Th("PRICE"),
-                ])),
-                html.Tbody(rows),
+                html.Thead(html.Tr(header_cells)),
+                html.Tbody(id="val-txn-tbody", children=rows),
             ]),
-        ]) if rows else html.P("No recent transactions found.",
-                               style={"color": "var(--color-text-muted)",
-                                      "fontSize": "13px"}),
+        ]) if (rows or txns) else html.P("No recent transactions found.",
+                                         style={"color": "var(--color-text-muted)",
+                                                "fontSize": "13px"}),
     ])
 
 
@@ -1012,13 +1213,14 @@ def valuation_insight(data, listing_price, verdict, p15, p85):
 
 
 # ── Map layer config (palette: no blue — that's reserved for subject flat) ──
+# Maki symbols via Scattermap (Plotly 6.x / MapLibre — no Mapbox token needed)
 _LAYER_STYLE = {
-    "mrt":        {"color": "#3D9FA8", "size": 12, "label": "MRT/LRT"},       # teal/turquoise
-    "school":     {"color": "#E8C84A", "size": 10, "label": "School"},         # yellow
-    "mall":       {"color": "#E87DAD", "size": 10, "label": "Mall"},           # pink
-    "healthcare": {"color": "#B48FD4", "size": 10, "label": "Healthcare"},     # purple
-    "hawker":     {"color": "#87C4E0", "size": 10, "label": "Hawker"},         # light blue
-    "park":       {"color": "#6EC97A", "size": 10, "label": "Park"},           # light green
+    "mrt":        {"color": "#3D9FA8", "size": 16, "symbol": "rail",       "label": "MRT/LRT"},
+    "school":     {"color": "#C8A800", "size": 14, "symbol": "school",     "label": "School"},
+    "mall":       {"color": "#D45B8A", "size": 14, "symbol": "shop",       "label": "Mall"},
+    "healthcare": {"color": "#8B5DB0", "size": 14, "symbol": "hospital",   "label": "Healthcare"},
+    "hawker":     {"color": "#4A9EC2", "size": 14, "symbol": "restaurant", "label": "Hawker"},
+    "park":       {"color": "#4AAF5A", "size": 14, "symbol": "park",       "label": "Park"},
 }
 
 def _nearby_amenity_pts(pts, user_lat, user_lon, radius_m=3000):
@@ -1039,17 +1241,18 @@ def _nearby_amenity_pts(pts, user_lat, user_lon, radius_m=3000):
 def make_listings_map(user_lat, user_lon, user_address, listings,
                        past_txns=None, active_layers=None, amenity_pins=None):
     """
-    Build the interactive map figure.
-    active_layers: set/list of layer names to show — any of
-      'current', 'past', 'mrt', 'school', 'mall', 'healthcare', 'hawker'
+    Build the interactive map using Scattermap (Plotly 6.x / MapLibre).
+    Maki symbols render correctly without a Mapbox token on carto-positron.
+    active_layers: set of 'current', 'past', 'mrt', 'school', 'mall',
+                   'healthcare', 'hawker', 'park'
     """
     if active_layers is None:
-        active_layers = {"current", "mrt", "school", "mall", "healthcare", "hawker"}
+        active_layers = {"current", "mrt", "school", "mall", "healthcare", "hawker", "park"}
     active_layers = set(active_layers)
 
     fig = go.Figure()
 
-    # ── Amenity layers ──────────────────────────────────────────
+    # ── Amenity layers (Maki symbols via Scattermap) ────────────
     if amenity_pins:
         for atype, style in _LAYER_STYLE.items():
             if atype not in active_layers:
@@ -1057,41 +1260,47 @@ def make_listings_map(user_lat, user_lon, user_address, listings,
             pts = _nearby_amenity_pts(amenity_pins.get(atype, []), user_lat, user_lon)
             if not pts:
                 continue
-            fig.add_trace(go.Scattermapbox(
+            fig.add_trace(go.Scattermap(
                 lat=[p["lat"] for p in pts],
                 lon=[p["lon"] for p in pts],
                 mode="markers",
-                marker=go.scattermapbox.Marker(size=style["size"], color=style["color"],
-                                               opacity=0.85),
+                marker=go.scattermap.Marker(
+                    size=style["size"],
+                    color=style["color"],
+                    symbol=style["symbol"],
+                    opacity=0.9,
+                ),
                 hovertext=[f"<b>{style['label']}</b><br>{p['name']}" for p in pts],
                 hoverinfo="text",
                 name=style["label"],
                 showlegend=False,
             ))
 
-    # ── Past transactions (grey dots) ──────────────────────────
+    # ── Past transactions (grey circles) ───────────────────────
     if "past" in active_layers and past_txns:
-        fig.add_trace(go.Scattermapbox(
-            lat=[t["lat"] for t in past_txns if t.get("lat")],
-            lon=[t["lon"] for t in past_txns if t.get("lon")],
-            mode="markers",
-            marker=go.scattermapbox.Marker(size=9, color="#9CA3AF", opacity=0.7),
-            hovertext=[
-                f"<b>Past: Blk {t['block']} {t['street']}</b><br>"
-                f"{t['floor']} · {t['flat_type']} · ${t['price']:,} ({t['date']})"
-                for t in past_txns if t.get("lat")
-            ],
-            hoverinfo="text",
-            name="Past transactions",
-            showlegend=False,
-        ))
+        valid_past = [t for t in past_txns if t.get("lat") and t.get("lon")]
+        if valid_past:
+            fig.add_trace(go.Scattermap(
+                lat=[t["lat"] for t in valid_past],
+                lon=[t["lon"] for t in valid_past],
+                mode="markers",
+                marker=go.scattermap.Marker(size=9, color="#9CA3AF", opacity=0.7),
+                hovertext=[
+                    f"<b>Past: Blk {t['block']} {t['street']}</b><br>"
+                    f"{t['floor']} · {t['flat_type']} · ${t['price']:,} ({t['date']})"
+                    for t in valid_past
+                ],
+                hoverinfo="text",
+                name="Past transactions",
+                showlegend=False,
+            ))
 
-    # ── Current listings (green numbered dots) ─────────────────
+    # ── Current listings (green numbered circles) ──────────────
     if "current" in active_layers:
         for lst in [l for l in listings if l.get("lat") is not None]:
-            fig.add_trace(go.Scattermapbox(
+            fig.add_trace(go.Scattermap(
                 lat=[lst["lat"]], lon=[lst["lon"]], mode="markers+text",
-                marker=go.scattermapbox.Marker(size=16, color="#16A34A"),
+                marker=go.scattermap.Marker(size=16, color="#16A34A"),
                 text=[str(lst["rank"])],
                 textfont=dict(size=9, color="white"),
                 hovertext=[f"<b>#{lst['rank']} Blk {lst['blk']} {lst['street']}</b><br>"
@@ -1100,21 +1309,21 @@ def make_listings_map(user_lat, user_lon, user_address, listings,
                 showlegend=False,
             ))
 
-    # ── Subject flat (always shown) ─────────────────────────────
-    fig.add_trace(go.Scattermapbox(
+    # ── Subject flat (always shown, red circle) ─────────────────
+    fig.add_trace(go.Scattermap(
         lat=[user_lat], lon=[user_lon], mode="markers+text",
-        marker=go.scattermapbox.Marker(size=20, color="#1C4ED8"),
+        marker=go.scattermap.Marker(size=22, color="#DC2626", symbol="circle"),
         text=["Your flat"],
         textposition="bottom center",
-        textfont=dict(size=11, color="#1C4ED8"),
+        textfont=dict(size=11, color="#DC2626"),
         hovertext=[f"<b>Your flat</b><br>{user_address}"],
         hoverinfo="text",
         showlegend=False,
     ))
 
     fig.update_layout(
-        mapbox=dict(style="carto-positron", zoom=14,
-                    center={"lat": user_lat, "lon": user_lon}),
+        map=dict(style="carto-positron", zoom=14,
+                 center={"lat": user_lat, "lon": user_lon}),
         margin={"r": 0, "t": 0, "l": 0, "b": 0},
         paper_bgcolor="rgba(0,0,0,0)",
         showlegend=False,
@@ -1203,7 +1412,7 @@ def listing_cards(listings, p85, scope="town"):
         html.Div(className="listings-header", children=[
             html.Div(style={"display": "flex", "justifyContent": "space-between",
                             "alignItems": "center", "marginBottom": "4px"}, children=[
-                html.P("CURRENT MARKET ALTERNATIVES", className="listings-header-title",
+                html.P("ALTERNATIVE LISTINGS", className="listings-header-title",
                        style={"margin": "0"}),
                 scope_toggle,
             ]),
@@ -1227,18 +1436,14 @@ def top_left_panel(data, listing_price=None):
     if verdict == "OVERPRICED":
         badge = html.Div("\u26a0\ufe0f OVERPRICED",
                          className="verdict-badge verdict-overpriced")
-        listed_color = "var(--color-danger)"
     elif verdict == "GOOD DEAL":
         badge = html.Div("\U0001f7e2 GOOD DEAL",
                          className="verdict-badge verdict-gooddeal")
-        listed_color = "var(--color-success)"
     elif verdict == "FAIR VALUE":
         badge = html.Div("\u2705 FAIR VALUE",
                          className="verdict-badge verdict-fairvalue")
-        listed_color = "var(--color-text-secondary)"
     else:
         badge = None
-        listed_color = None
 
     warn = lease_warning(data.get("remaining_lease_bin", ""))
 
@@ -1261,23 +1466,10 @@ def top_left_panel(data, listing_price=None):
                         "marginBottom": "4px"}),
         html.P(f"Range: ${p15:,} \u2014 ${p85:,}",
                style={"fontSize": "13px", "color": "var(--color-text-secondary)",
-                      "marginBottom": "4px"}),
-        # Listed price
-        html.P(f"Listed at ${listing_price:,}",
-               style={"fontSize": "14px", "fontWeight": "600",
-                      "color": listed_color, "marginBottom": "12px"}
-               ) if listing_price else None,
+                      "marginBottom": "12px"}),
 
         # Market premium bar
         market_premium_bar(listing_price, p15, p85),
-
-        # Placeholder model notice (shown when not demo data)
-        html.Div(
-            "⚠ Price range based on historical percentiles. "
-            "Full Random Forest model coming soon.",
-            style={"fontSize": "11px", "color": "var(--color-text-muted)",
-                   "fontStyle": "italic", "marginTop": "8px"}
-        ) if data.get("_model_note") else None,
 
         html.Div(className="divider", style={"margin": "16px 0"}),
 
@@ -1292,10 +1484,17 @@ def top_left_panel(data, listing_price=None):
                       html.P(data["postal_code"], className="flat-detail-val")]),
             html.Div([html.P("FLAT TYPE", className="flat-detail-label"),
                       html.P(data["flat_type"], className="flat-detail-val")]),
-            html.Div([html.P("REMAINING LEASE", className="flat-detail-label"),
-                      html.P(data["remaining_lease"], className="flat-detail-val")]),
-            html.Div([html.P("STOREY BIN", className="flat-detail-label"),
-                      html.P(data["storey_level_bin"], className="flat-detail-val")]),
+            html.Div([
+                html.P("LEASE COMMENCE / REMAINING", className="flat-detail-label"),
+                html.P(
+                    f"{data['lease_commence_date']} / {data['remaining_lease']}"
+                    if data.get("lease_commence_date")
+                    else data.get("remaining_lease", "—"),
+                    className="flat-detail-val"
+                ),
+            ]),
+            html.Div([html.P("STOREY LEVEL", className="flat-detail-label"),
+                      html.P(f"{data['storey_level_bin']} floor" if data.get("storey_level_bin") else "—", className="flat-detail-val")]),
             html.Div([html.P("TOWN", className="flat-detail-label"),
                       html.P(data["town"], className="flat-detail-val")]),
         ]),
@@ -1312,12 +1511,15 @@ def top_right_panel(data, listing_price=None):
     p15 = data["projection"]["p15"]
     p85 = data["projection"]["p85"]
     trend_source = data.get("_trend_source", "same street · same flat type")
-    return html.Div(className="val-top-right card", style={"padding": "0", "overflow": "hidden"}, children=[
+    return html.Div(className="val-top-right card",
+                    style={"padding": "0", "overflow": "hidden",
+                           "display": "flex", "flexDirection": "column"}, children=[
         # Dark header
         html.Div(style={
             "background": "var(--color-navy, #1E2A3B)",
             "padding": "14px 20px",
             "borderRadius": "var(--radius) var(--radius) 0 0",
+            "flexShrink": "0",
         }, children=[
             html.H3("HISTORICAL PRICE TRENDS",
                     style={"fontSize": "13px", "fontWeight": "800",
@@ -1327,27 +1529,29 @@ def top_right_panel(data, listing_price=None):
                    style={"fontSize": "12px", "color": "rgba(255,255,255,0.6)",
                           "margin": "0"}),
         ]),
-        html.Div(style={"padding": "16px 20px"}, children=[
+        html.Div(style={"padding": "16px 20px", "flex": "1", "overflow": "hidden",
+                        "display": "flex", "flexDirection": "column", "minHeight": "0"}, children=[
             # Chart on top
             dcc.Graph(
                 figure=make_trend_chart(data.get("graph_trend", []),
                                         listing_price=listing_price,
                                         p15=p15, p85=p85),
                 config={"displayModeBar": False},
-                style={"height": "220px"},
+                style={"height": "220px", "flexShrink": "0"},
             ),
             html.P(
                 f"Average transaction price \u2014 {trend_source}",
                 style={"fontSize": "11px", "color": "var(--color-text-muted)",
                        "textAlign": "center", "marginTop": "2px", "fontStyle": "italic",
-                       "marginBottom": "16px"},
+                       "marginBottom": "16px", "flexShrink": "0"},
             ),
             # Past transactions table below (scrollable)
             html.H3("Past Transactions",
                     style={"fontSize": "15px", "fontWeight": "700",
                            "color": "var(--color-text-primary)",
                            "paddingTop": "12px", "marginBottom": "8px",
-                           "borderTop": "1px solid var(--color-border)"}),
+                           "borderTop": "1px solid var(--color-border)",
+                           "flexShrink": "0"}),
             past_data_table(data),
         ]),
     ])
@@ -1367,27 +1571,47 @@ _MAP_LAYERS = [
 _DEFAULT_LAYERS = {"current", "past", "mrt", "school", "mall", "healthcare", "hawker", "park"}
 
 
+# Icon/emoji for each layer used in the legend
+_LAYER_EMOJI = {
+    "current":    "\U0001f7e2",   # 🟢
+    "past":       "\u26aa",       # ⚪
+    "mrt":        "\U0001f687",   # 🚇
+    "school":     "\U0001f393",   # 🎓
+    "mall":       "\U0001f6cd\ufe0f", # 🛍️
+    "healthcare": "\U0001f3e5",   # 🏥
+    "hawker":     "\U0001f35c",   # 🍜
+    "park":       "\U0001f333",   # 🌳
+}
+
 def layer_toggles(active_layers):
-    """Render pill-style toggle buttons for each map layer."""
+    """Icon + label toggle buttons — active = coloured bg, inactive = white bg with border."""
     btns = []
     for key, label, color in _MAP_LAYERS:
+        emoji = _LAYER_EMOJI.get(key, "\u25cf")
         is_active = key in active_layers
         btns.append(html.Button(
-            label,
+            children=[
+                html.Span(emoji, style={"fontSize": "13px", "lineHeight": "1",
+                                        "marginRight": "5px"}),
+                html.Span(label, style={"fontSize": "11px", "fontWeight": "600"}),
+            ],
             id={"type": "map-layer-btn", "layer": key},
             n_clicks=0,
             style={
-                "fontSize": "11px", "padding": "4px 10px",
-                "borderRadius": "20px", "border": "1.5px solid",
-                "cursor": "pointer", "fontWeight": "600",
-                "borderColor": color,
+                "display": "flex", "alignItems": "center",
+                "padding": "4px 10px", "borderRadius": "20px",
+                "border": f"1.5px solid {color}",
+                "cursor": "pointer",
                 "background": color if is_active else "white",
                 "color": "white" if is_active else color,
                 "transition": "all 0.15s",
+                "fontFamily": "var(--sans)",
             },
         ))
-    return html.Div(style={"display": "flex", "flexWrap": "wrap", "gap": "6px",
-                           "marginBottom": "10px"}, children=btns)
+    return html.Div(style={
+        "display": "flex", "flexWrap": "wrap", "gap": "6px",
+        "marginBottom": "10px",
+    }, children=btns)
 
 
 # ── Bottom-left panel: map ─────────────────────────────────────
@@ -1413,7 +1637,6 @@ def bottom_left_panel(data):
             config={"displayModeBar": False, "scrollZoom": True},
             style={"height": "360px"},
         ),
-        # Hidden store: active layers
         dcc.Store(id="val-map-layers", data=list(_DEFAULT_LAYERS)),
     ])
 
@@ -1426,11 +1649,17 @@ def bottom_right_panel(data, p85):
 # ── Overpriced banner (amber style) ───────────────────────────
 def overpriced_banner():
     return html.Div(className="overpriced-banner", children=[
-        html.P("\u26a0\ufe0f  Overpriced? Check out potential alternatives below",
+        html.P("\u26a0\ufe0f  Overpriced? Explore potential alternatives below",
                className="overpriced-banner-title"),
-        html.P("Current listings matched on flat type, storey level, and remaining "
-               "lease \u2014 sorted by similarity to your flat.",
-               className="overpriced-banner-sub"),
+        html.P([
+            "Alternatives are matched on flat type, storey level, and remaining lease \u2014 "
+            "sorted by price. "
+            "Note their postal codes and use the ",
+            dcc.Link("Amenities Comparison", href="/amenities-comparison",
+                     style={"color": "inherit", "fontWeight": "600",
+                            "textDecoration": "underline"}),
+            " tool to weigh location trade-offs before deciding.",
+        ], className="overpriced-banner-sub"),
     ])
 
 
@@ -1438,6 +1667,7 @@ def overpriced_banner():
 def valuation_dashboard(data, listing_price=None):
     p15 = data["projection"]["p15"]
     p85 = data["projection"]["p85"]
+    prefill_data = dict(data, listed_price=listing_price)
 
     children = [
         # Hidden data store for callbacks
@@ -1451,12 +1681,16 @@ def valuation_dashboard(data, listing_price=None):
             "current_listings_block": data.get("current_listings_block", []),
             "p85":                    p85,
         }),
+        dcc.Store(id="val-txn-sort", data={"col": None, "asc": True}),
         html.Div(className="val-compact-bar", children=[
             html.Div(className="val-compact-inner", children=[
-                input_form(prefill=data, compact=True),
+                input_form(prefill=prefill_data, compact=True),
             ]),
         ]),
-        html.Button(id="val-demo", style={"display": "none"}, n_clicks=0),
+        html.Button("Load Demo", id="val-demo",
+                    className="btn btn-secondary val-demo-btn",
+                    n_clicks=0,
+                    style={"display": "none"}),  # hidden in compact bar — accessible via pre-search
         html.Div(className="val-top-row val-content-area", children=[
             top_left_panel(data, listing_price),
             top_right_panel(data, listing_price),
@@ -1489,12 +1723,12 @@ def pre_search_layout(prefill=None):
             ),
             html.Div(className="valuation-form-card", children=[
                 input_form(prefill=prefill),
-                html.Button(
-                    "Try Demo \u2014 Blk 58 Toa Payoh", id="val-demo",
-                    className="btn btn-secondary",
-                    style={"width": "100%", "justifyContent": "center",
-                           "marginTop": "8px", "fontSize": "13px"},
-                ),
+                html.Div(style={"display": "flex", "gap": "8px", "marginTop": "8px"}, children=[
+                    html.Button("Load Demo", id="val-demo",
+                                className="btn btn-secondary val-demo-btn",
+                                n_clicks=0,
+                                title="Load a real overpriced listing in Queenstown as a demo"),
+                ]),
             ]),
         ])
     ])
@@ -1515,16 +1749,15 @@ layout = html.Div(className="page-wrapper", id="val-page-root", children=[
     State("val-postal", "value"),
     State("val-flat-type", "value"),
     State("val-storey-bin", "value"),
-    State("val-lease-bin", "value"),
     State("val-listed", "value"),
     prevent_initial_call=True,
 )
-def run_valuation(n_submit, n_demo, postal, flat_type, storey_bin, lease_bin, listed):  # noqa: ARG001
-    from dash import ctx
-    trig = ctx.triggered_id
-
-    if trig == "val-demo":
-        return valuation_dashboard(DEMO, listing_price=DEMO_LISTING_PRICE), ""
+def run_valuation(n_submit, n_demo, postal, flat_type, storey_bin, listed):  # noqa: ARG001
+    # Demo short-circuit: bypass form validation and use pre-built DEMO data
+    if ctx.triggered_id == "val-demo":
+        with open(os.path.join(_BASE, "mock_data", "valuation_demo.json"), encoding="utf-8") as _f:
+            demo_data = json.load(_f)
+        return valuation_dashboard(demo_data, listing_price=DEMO_LISTING_PRICE), ""
 
     if not postal:
         return no_update, "Please select a postal code."
@@ -1532,13 +1765,11 @@ def run_valuation(n_submit, n_demo, postal, flat_type, storey_bin, lease_bin, li
         return no_update, "Please select a flat type."
     if not storey_bin:
         return no_update, "Please select a storey level."
-    if not lease_bin:
-        return no_update, "Please select a remaining lease range."
 
     listed_int = int(listed) if listed else None
-    data = build_real_data(postal.strip(), flat_type, storey_bin, lease_bin)
+    data = build_real_data(postal.strip(), flat_type, storey_bin)
     if data is None:
-        return no_update, "Postal code not found in our database. Try the demo instead."
+        return no_update, "Postal code not found in our database."
     return valuation_dashboard(data, listing_price=listed_int), ""
 
 
@@ -1546,19 +1777,23 @@ def run_valuation(n_submit, n_demo, postal, flat_type, storey_bin, lease_bin, li
     Output("val-flat-type", "value"),
     Output("val-flat-type", "options"),
     Output("val-storey-bin", "value"),
-    Output("val-lease-bin", "value"),
     Input("val-postal", "value"),
+    State("val-flat-type", "value"),
+    State("val-storey-bin", "value"),
     prevent_initial_call=True,
 )
-def autofill_from_postal(postal):
+def autofill_from_postal(postal, current_ft, current_storey):
     all_ft_options = [{"label": ft, "value": ft} for ft in FLAT_TYPES]
     if not postal:
-        return None, all_ft_options, None, None
+        return None, all_ft_options, None
     meta = _POSTAL_META.get(str(postal).zfill(6))
     if not meta:
-        return None, all_ft_options, None, None
-    # Pre-select from enriched data but always keep all options available
-    return meta["flat_type"], all_ft_options, meta["storey_level_bin"], meta["remaining_lease_bin"]
+        return None, all_ft_options, None
+    return (
+        meta["flat_type"] if not current_ft else current_ft,
+        all_ft_options,
+        meta["storey_level_bin"] if not current_storey else current_storey,
+    )
 
 
 @callback(
@@ -1577,41 +1812,51 @@ def prefill_from_store(pathname, prefill_data):
 @callback(
     Output("val-map-layers", "data"),
     Output("val-map-graph", "figure"),
+    Output({"type": "map-layer-btn", "layer": dash.ALL}, "style"),
     Input({"type": "map-layer-btn", "layer": dash.ALL}, "n_clicks"),
     State("val-map-layers", "data"),
     State("val-data-store", "data"),
     prevent_initial_call=True,
 )
-def toggle_map_layer(_n_clicks_list, active_layers, store):  # noqa: ARG001
+def toggle_map_layer(_n, active_layers, store):  # noqa: ARG001
     from dash import ctx
     if not ctx.triggered_id or store is None:
-        return no_update, no_update
-
+        return no_update, no_update, no_update
     triggered_layer = ctx.triggered_id["layer"]
     active = set(active_layers or list(_DEFAULT_LAYERS))
     if triggered_layer in active:
         active.discard(triggered_layer)
     else:
         active.add(triggered_layer)
-
-    # Re-render past_txns with lat/lon for map (need to add lat/lon back)
-    past_txns_raw = store.get("past_transactions", [])
-    # past_transactions in store may not have lat/lon; fetch from _PAST_TXN by matching
-    # Actually build_real_data stores them from _get_nearby_txns which includes lat/lon cols
-    # Store them with lat/lon during get_past_transactions
     fig = make_listings_map(
         store["lat"], store["lon"], store["address"],
         store.get("current_listings", []),
-        past_txns=past_txns_raw,
+        past_txns=store.get("past_transactions", []),
         active_layers=active,
         amenity_pins=_AMENITY_PINS,
     )
-    return list(active), fig
+    # Rebuild button styles in _MAP_LAYERS order (matches DOM order)
+    btn_styles = []
+    for key, _, color in _MAP_LAYERS:
+        is_active = key in active
+        btn_styles.append({
+            "display": "flex", "alignItems": "center",
+            "padding": "4px 10px", "borderRadius": "20px",
+            "border": f"1.5px solid {color}",
+            "cursor": "pointer",
+            "background": color if is_active else "white",
+            "color": "white" if is_active else color,
+            "transition": "all 0.15s",
+            "fontFamily": "var(--sans)",
+        })
+    return list(active), fig, btn_styles
 
 
 # ── Listing scope toggle callback ──────────────────────────────
 @callback(
     Output("val-listings-body", "children"),
+    Output("val-scope-block", "className"),
+    Output("val-scope-town", "className"),
     Input("val-scope-block", "n_clicks"),
     Input("val-scope-town", "n_clicks"),
     State("val-data-store", "data"),
@@ -1620,7 +1865,7 @@ def toggle_map_layer(_n_clicks_list, active_layers, store):  # noqa: ARG001
 def toggle_listing_scope(_n_block, _n_town, store):  # noqa: ARG001
     from dash import ctx
     if store is None:
-        return no_update
+        return no_update, no_update, no_update
     trig = ctx.triggered_id
     scope = "block" if trig == "val-scope-block" else "town"
     p85 = store.get("p85", 600000)
@@ -1629,8 +1874,7 @@ def toggle_listing_scope(_n_block, _n_town, store):  # noqa: ARG001
         if scope == "block" else
         store.get("current_listings", [])
     )
-    # Re-render just the cards list (not the full listing_cards wrapper)
-    return (
+    body = (
         html.Div(className="listings-scroll", children=[
             _listing_card(lst, p85) for lst in listings
         ]) if listings else
@@ -1638,6 +1882,33 @@ def toggle_listing_scope(_n_block, _n_town, store):  # noqa: ARG001
                style={"padding": "16px", "color": "var(--color-text-muted)",
                       "fontSize": "13px"})
     )
+    block_cls = "scope-btn" + (" scope-btn-active" if scope == "block" else "")
+    town_cls  = "scope-btn" + (" scope-btn-active" if scope == "town"  else "")
+    return body, block_cls, town_cls
+
+
+# ── Past transactions sort callback ───────────────────────────
+@callback(
+    Output("val-txn-sort",  "data"),
+    Output("val-txn-tbody", "children"),
+    Input({"type": "txn-sort-col", "col": dash.ALL}, "n_clicks"),
+    State("val-txn-sort",  "data"),
+    State("val-data-store", "data"),
+    prevent_initial_call=True,
+)
+def sort_past_transactions(_n, sort_state, store):
+    if not ctx.triggered_id or store is None:
+        return no_update, no_update
+    col = ctx.triggered_id["col"]
+    prev_col = sort_state.get("col")
+    prev_asc = sort_state.get("asc", True)
+    if col == prev_col:
+        new_asc = not prev_asc
+    else:
+        new_asc = True
+    txns = store.get("past_transactions", [])
+    rows = _txn_rows(txns, col, new_asc)
+    return {"col": col, "asc": new_asc}, rows
 
 
 def _listing_card(lst, p85):
