@@ -1,3 +1,55 @@
-version https://git-lfs.github.com/spec/v1
-oid sha256:4eca281bd66a12e0f20535e21495315cd8351148ce4003d5579ea5332081a663
-size 7919
+town,station_name,line,line_code,expected_year,status,lat,lon,notes
+ANG MO KIO,Tavistock,Cross Island Line,CRL,2030.0,Under construction,1.3701972380126186,103.86327814413596,CRL Phase 1
+ANG MO KIO,Ang Mo Kio,Cross Island Line,CRL,2030.0,Under construction,1.369948659219826,103.84961635294518,CRL Phase 1 - interchange with NSL
+ANG MO KIO,Teck Ghee,Cross Island Line,CRL,2030.0,Under construction,1.3655366015365205,103.84360463817544,CRL Phase 1
+BEDOK,Bedok South,Thomson-East Coast Line,TEL,2026.0,Under construction,1.3166456856882618,103.94923038001318,TEL Stage 5
+BEDOK,Sungei Bedok,Thomson-East Coast Line,TEL,2026.0,Under construction,1.3203959599740995,103.9572076207986,TEL Stage 5 - interchange with DTL
+BEDOK,Xilin,Downtown Line,DTL,2026.0,Under construction,1.328734540243039,103.96486806284406,DTL Stage 3 Extension
+BISHAN,Bright Hill,Cross Island Line,CRL,2030.0,Under construction,1.363375806807979,103.83610947901916,CRL Phase 1 western terminal of Phase 1 - interchange with TEL
+BISHAN,Turf City,Cross Island Line,CRL,2032.0,Under construction,1.3409139926581004,103.79442676751876,CRL Phase 2
+BUKIT BATOK,Bukit Batok West,Jurong Region Line,JRL,2027.0,Under construction,1.3456739510149516,103.7395019676103,JRL Phase 1 - station name subject to LTA confirmation
+BUKIT BATOK,Bukit Batok South,Jurong Region Line,JRL,2029.0,Under construction,,,JRL Phase 3 - station name subject to LTA confirmation
+BUKIT BATOK,Brickland,North-South Line,NSL,2034.0,Confirmed,1.3684011947216186,103.749676524253,NSL infill station between Bukit Gombak and Choa Chu Kang
+BUKIT MERAH,Keppel,Circle Line,CCL,2026.0,Under construction,1.2701719539198713,103.83029594184094,CCL Stage 6 - closes the Circle Line loop
+BUKIT MERAH,Cantonment,Circle Line,CCL,2026.0,Under construction,1.2730817331802042,103.8367402503118,CCL Stage 6
+BUKIT MERAH,Prince Edward Road,Circle Line,CCL,2026.0,Under construction,1.2732407280310234,103.84726563653462,CCL Stage 6
+BUKIT TIMAH,King Albert Park,Cross Island Line,CRL,2032.0,Under construction,1.3338187107983213,103.78237636303498,CRL Phase 2 - interchange with DTL
+CHOA CHU KANG,Choa Chu Kang West,Jurong Region Line,JRL,2027.0,Under construction,1.3792210090842536,103.74001342904069,JRL Phase 1 - station name subject to LTA confirmation
+CLEMENTI,Pandan Reservoir,Jurong Region Line,JRL,2028.0,Under construction,1.320458223153171,103.7448007651914,JRL Phase 2 terminal - station name subject to LTA confirmation
+CLEMENTI,Maju,Cross Island Line,CRL,2032.0,Under construction,1.3281487684997983,103.7769245837171,CRL Phase 2
+CLEMENTI,Clementi,Cross Island Line,CRL,2032.0,Under construction,1.3167847097204657,103.765974861089,CRL Phase 2 - interchange with EWL
+CLEMENTI,West Coast,Cross Island Line,CRL,2032.0,Under construction,1.3105599161973904,103.7582663586318,CRL Phase 2
+HOUGANG,Riviera,Cross Island Line,CRL,2030.0,Under construction,1.394636478607641,103.91622379000934,CRL Phase 1
+HOUGANG,Hougang,Cross Island Line,CRL,2030.0,Under construction,1.3714546590268426,103.8923500698093,CRL Phase 1 - interchange with NEL
+HOUGANG,Defu,Cross Island Line,CRL,2030.0,Under construction,1.362340217706898,103.89899601290712,CRL Phase 1 - serves new Defu housing precinct
+JURONG EAST,Jurong Lake District,Cross Island Line,CRL,2032.0,Under construction,1.3271604433801358,103.73981250483112,CRL Phase 2 western terminal - serves JLD
+JURONG WEST,Tawas,Jurong Region Line,JRL,2027.0,Under construction,1.350658112886788,103.69188973659976,JRL Phase 1 - station name subject to LTA confirmation
+JURONG WEST,Jurong West,Jurong Region Line,JRL,2027.0,Under construction,1.3491851409286144,103.70825683283655,JRL Phase 1 - station name subject to LTA confirmation
+JURONG WEST,Bahar Junction,Jurong Region Line,JRL,2027.0,Under construction,1.3461917323028454,103.7030341020502,JRL Phase 1 - interchange with EWL at Boon Lay; station name subject to LTA confirmation
+JURONG WEST,Boon Lay,Jurong Region Line,JRL,2027.0,Under construction,1.338108025346798,103.70457367156334,JRL Phase 1 - interchange with EWL; station name subject to LTA confirmation
+JURONG WEST,Enterprise,Jurong Region Line,JRL,2027.0,Under construction,1.3327316696239189,103.70857975778225,JRL Phase 1 - station name subject to LTA confirmation
+JURONG WEST,Tukang,Jurong Region Line,JRL,2027.0,Under construction,1.3254102896356106,103.70924521471404,JRL Phase 1 - station name subject to LTA confirmation
+JURONG WEST,Nanyang Crescent,Jurong Region Line,JRL,2028.0,Under construction,1.348406058361224,103.68080361982648,JRL Phase 2 - station name subject to LTA confirmation
+JURONG WEST,Nanyang,Jurong Region Line,JRL,2028.0,Under construction,,,JRL Phase 2 - serves NTU; station name subject to LTA confirmation
+JURONG WEST,Gek Poh,Jurong Region Line,JRL,2028.0,Under construction,1.3483461900761775,103.6981160327606,JRL Phase 2 - station name subject to LTA confirmation
+JURONG WEST,Taman Jurong,Jurong Region Line,JRL,2028.0,Under construction,,,JRL Phase 2 - station name subject to LTA confirmation
+JURONG WEST,Peng Kang Hill,Jurong Region Line,JRL,2028.0,Under construction,1.3432230839217252,103.67855554554436,JRL Phase 2 terminal - station name subject to LTA confirmation
+JURONG WEST,Jurong Pier,Jurong Region Line,JRL,2029.0,Under construction,1.3131311689118546,103.71039877678588,JRL Phase 3 terminal - station name subject to LTA confirmation
+JURONG WEST,NTU,Jurong Region Line,JRL,2029.0,Under construction,,,JRL Phase 3 - serves Nanyang Technological University; station name subject to LTA confirmation
+JURONG WEST,Boon Lay South,Jurong Region Line,JRL,2029.0,Under construction,,,JRL Phase 3 - station name subject to LTA confirmation
+JURONG WEST,Gek Poh South,Jurong Region Line,JRL,2029.0,Under construction,,,JRL Phase 3 - station name subject to LTA confirmation
+KALLANG,Founders' Memorial,Thomson-East Coast Line,TEL,2028.0,Under construction,1.29097356021274,103.86893419081728,TEL infill station between Gardens by the Bay and Tanjong Rhu; opens with Founders' Memorial
+MARINA SOUTH,Marina South,Thomson-East Coast Line,TEL,,Proposed,1.2742039630199826,103.86311257442676,TEL infill station between Marina Bay and Gardens by the Bay; no confirmed timeline
+PASIR RIS,Aviation Park,Cross Island Line,CRL,2030.0,Under construction,1.3702113670676506,104.00351389332846,CRL Phase 1 eastern terminal
+PASIR RIS,Loyang,Cross Island Line,CRL,2030.0,Under construction,1.3714039693793765,103.97222524704988,CRL Phase 1
+PASIR RIS,Pasir Ris,Cross Island Line,CRL,2030.0,Under construction,1.370903461094558,103.9493739955676,CRL Phase 1 - interchange with EWL and CPE
+PUNGGOL,Punggol North,Cross Island Line,CRL,2032.0,Under construction,,,CRL Punggol Extension
+PUNGGOL,Punggol,Cross Island Line,CRL,2032.0,Under construction,1.4051667770089038,103.90239279945696,CRL Punggol Extension - interchange with NEL and Punggol LRT
+SENGKANG,Rivervale,Cross Island Line,CRL,2032.0,Under construction,,,CRL Punggol Extension
+SERANGOON,Serangoon North,Cross Island Line,CRL,2030.0,Under construction,1.3705661627364352,103.87392796807832,CRL Phase 1
+TENGAH,Tengah,Jurong Region Line,JRL,2027.0,Under construction,1.3663534647032467,103.73001067862933,JRL Phase 1 - station name subject to LTA confirmation
+TENGAH,Tengah Park,Jurong Region Line,JRL,2027.0,Under construction,1.352326157460195,103.73678393001224,JRL Phase 1 - station name subject to LTA confirmation
+TENGAH,Tengah Central,Jurong Region Line,JRL,2028.0,Under construction,,,JRL Phase 2 - station name subject to LTA confirmation
+TOA PAYOH,Mount Pleasant,Thomson-East Coast Line,TEL,,Proposed,1.3285471133429991,103.83506011898334,TEL infill station between Caldecott and Stevens; no confirmed timeline
+WOODLANDS,Woodlands North (RTS),RTS Link,RTS,2026.0,Under construction,,,Cross-border link to Johor Bahru Bukit Chagar; connects to TEL
+WOODLANDS,Sungei Kadut,North-South Line,NSL,2035.0,Confirmed,,,NSL infill station between Yew Tee and Kranji
