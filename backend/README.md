@@ -90,7 +90,7 @@ Utility scripts at `backend/` root:
 
 | File | Description |
 |------|-------------|
-| `merged_hdb_resale_with_macro.csv` | Output of notebook 1. Transaction data merged with RPI, real prices (Q4 2025 base), filtered to 2021-Q1 onwards. |
+| `merged_hdb_resale_with_rpi.csv` | Output of notebook 1. Transaction data merged with RPI, real prices (Q4 2025 base), filtered to 2021-Q1 onwards. |
 | `hdb_with_train_distances.csv` | Output of notebook 2. Full dataset enriched with lat/lon coordinates and nearest MRT/LRT station details (`nearest_train_line`, `nearest_train_dist_m`, `nearest_train_name`). |
 | `[FINAL]hdb_with_amenities_macro_2026.csv` | Output of notebook 3 (2026 transactions only). Full dataset enriched with amenity distances, names, within-1km school/park lists, and `resale_price_real`. |
 | `[FINAL]hdb_with_amenities_macro_pre2026.csv` | Output of notebook 3 (2021–2025 transactions). Same schema as above. |
