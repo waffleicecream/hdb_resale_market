@@ -55,7 +55,7 @@ Utility scripts at `backend/` root:
 
 | File | Description |
 |------|-------------|
-| `hdbsale.py` | Selenium scraper that fetches live HDB resale listings from homes.hdb.gov.sg |
+| `hdb_resale_webscraper.py` | Selenium scraper that fetches live HDB resale listings from homes.hdb.gov.sg |
 | `user_input.py` | Single-address inference: takes a postal code and computes all amenity features for real-time valuation |
 | `similar_past_transactions.py` | Finds and displays historically similar past transactions for a given flat |
 | `enrich_missing_blocks.py` | Backfills missing block data for addresses that failed geocoding |
