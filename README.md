@@ -18,6 +18,25 @@ An interactive dashboard for exploring the Singapore HDB resale market, comparin
 
 ---
 
+## Live Demo
+
+The app is publicly deployed on HuggingFace Spaces — no installation required.
+
+**[https://huggingface.co/spaces/qyoon/propertyMB](https://huggingface.co/spaces/qyoon/propertyMB)**
+
+### How to access
+
+1. Open the link above in your browser.
+2. Wait a few seconds for the Space to wake up if it has been idle.
+3. Use the navigation bar to explore the three pages:
+   - **Market Analysis** — town-level choropleth map and price metrics
+   - **Amenities Comparison** — compare up to 3 HDB blocks by proximity to amenities
+   - **Flat Valuation** — enter a postal code to get an ML price estimate with prediction intervals
+
+No login or account is required to use the app.
+
+---
+
 ## Setup
 
 ### Prerequisites
