@@ -16,6 +16,7 @@ _ROOT    = os.path.dirname(_BASE)
 _MERGED  = os.path.join(_ROOT, "merged_data")
 _DATA    = os.path.join(_ROOT, "data")
 _BACKEND = os.path.join(_ROOT, "backend")
+_OUTPUTS = os.path.join(_ROOT, "outputs")
 
 with open(os.path.join(_BASE, "mock_data", "valuation_demo.json"), encoding="utf-8") as f:
     DEMO = json.load(f)
@@ -73,35 +74,17 @@ def _build_town_lookup():
 
 _TOWN_LOOKUP = _build_town_lookup()
 
-# ── Postal dropdown options: all 9k+ geocoded postcodes ────────
+# ── Postal dropdown options: from outputs/postal_lookup.json ───
 def _build_postal_options():
-    rows = []
-    # Start with enriched CSV (has flat_type info for display)
-    enriched_postals = set()
-    if not _ENRICHED.empty:
-        for _, r in (_ENRICHED[["postal_code", "block", "street", "town"]]
-                     .drop_duplicates("postal_code")
-                     .dropna(subset=["postal_code"])
-                     .iterrows()):
-            p = str(r["postal_code"]).zfill(6)
-            enriched_postals.add(p)
-            rows.append({
-                "label": f"{p}  —  Blk {r['block']} {str(r['street']).title()}, {str(r['town']).replace(' Town','').title()}",
-                "value": p,
-            })
-    # Fill remaining from geocode cache
-    for postal, g in sorted(_GEOCODE_LOOKUP.items()):
-        if postal in enriched_postals:
-            continue
-        blk = g["block"]
-        st  = g["street"].title()
-        bk_up = g["block"].upper()
-        st_up = g["street"].upper()
-        town_raw = _TOWN_LOOKUP.get((bk_up, st_up), "")
-        town_disp = town_raw.title() if town_raw else ""
-        label = f"{postal}  —  Blk {blk} {st}" + (f", {town_disp}" if town_disp else "")
-        rows.append({"label": label, "value": postal})
-    return sorted(rows, key=lambda x: x["value"])
+    path = os.path.join(_OUTPUTS, "postal_lookup.json")
+    if not os.path.exists(path):
+        return []
+    with open(path, encoding="utf-8") as f:
+        pl = json.load(f)
+    return [
+        {"label": f"{p} — {meta['address']}, {meta['town']}", "value": p}
+        for p, meta in sorted(pl.items(), key=lambda x: (x[1]["town"], x[1]["address"]))
+    ]
 
 _POSTAL_OPTIONS = _build_postal_options()
 
@@ -160,36 +143,37 @@ def _build_postal_meta():
 
 _POSTAL_META = _build_postal_meta()
 
-# ── Postal → lease_commence_date lookup ────────────────────────
-def _load_postal_lease():
-    path = os.path.join(_DATA, "postal_lease.csv")
+# ── Block+street → lease_commence_date (from unique_addresses.csv) ──
+def _build_block_lease_lookup():
+    path = os.path.join(_OUTPUTS, "unique_addresses.csv")
     if not os.path.exists(path):
         return {}
-    df = pd.read_csv(path, dtype={"postal_code": str})
-    df["postal_code"] = df["postal_code"].str.zfill(6)
-    return dict(zip(df["postal_code"], df["lease_commence_date"].astype(int)))
-
-_POSTAL_LEASE = _load_postal_lease()
-
-# ── Block+street → lease_commence_date (from pipeline CSVs) ───
-def _build_block_lease_lookup():
-    out = {}
-    for path in (
-        os.path.join(_MERGED, "[FINAL]hdb_with_amenities_macro_pre2026.csv"),
-        os.path.join(_MERGED, "[FINAL]hdb_with_amenities_macro_2026.csv"),
-    ):
-        if not os.path.exists(path):
-            continue
-        df = pd.read_csv(path, usecols=["block", "street_name", "lease_commence_date"],
-                         low_memory=False)
-        df = df.dropna(subset=["lease_commence_date"])
-        df["_bk"] = df["block"].astype(str).str.upper().str.strip()
-        df["_st"] = df["street_name"].astype(str).str.upper().str.strip()
-        for _, r in df.drop_duplicates(["_bk", "_st"], keep="last").iterrows():
-            out[(r["_bk"], r["_st"])] = int(r["lease_commence_date"])
-    return out
+    df = pd.read_csv(path, usecols=["block", "street_name", "lease_commence_date"],
+                     low_memory=False)
+    df = df.dropna(subset=["lease_commence_date"])
+    return {
+        (str(r["block"]).upper().strip(), str(r["street_name"]).upper().strip()): int(r["lease_commence_date"])
+        for _, r in df.iterrows()
+    }
 
 _BLOCK_LEASE = _build_block_lease_lookup()
+
+# ── Postal → lease_commence_date (via postal_lookup.json + _BLOCK_LEASE) ──
+def _load_postal_lease():
+    path = os.path.join(_OUTPUTS, "postal_lookup.json")
+    if not os.path.exists(path):
+        return {}
+    with open(path, encoding="utf-8") as f:
+        pl = json.load(f)
+    out = {}
+    for postal, meta in pl.items():
+        key = (str(meta["block"]).upper().strip(), str(meta["street_name"]).upper().strip())
+        lease = _BLOCK_LEASE.get(key)
+        if lease is not None:
+            out[str(postal).zfill(6)] = lease
+    return out
+
+_POSTAL_LEASE = _load_postal_lease()
 
 def _lease_bin_from_years(y):
     if y is None:
@@ -312,7 +296,7 @@ except Exception as _e:
     print(f"[flat_valuation] RF model not loaded: {_e}")
 
 # Amenity lookup: (block_upper, street_upper) → amenity feature dict
-# Built from pipeline CSVs (2026 wins over pre-2026 on duplicate block+street)
+# Built from unique_addresses.csv (pre-computed amenity distances incl. dist_cbd_m)
 _RF_CONTINUOUS = [
     "remaining_lease_years", "nearest_train_dist_m", "dist_nearest_hawker_m",
     "dist_nearest_primary_m", "num_primary_1km", "dist_nearest_park_m",
@@ -322,19 +306,17 @@ _RF_CONTINUOUS = [
 _RF_CATEGORICAL = ["flat_type", "town", "floor_category"]
 
 def _build_amenity_lookup():
+    path = os.path.join(_OUTPUTS, "unique_addresses.csv")
+    if not os.path.exists(path):
+        return {}
+    amenity_cols = [c for c in _RF_CONTINUOUS if c != "remaining_lease_years"]
+    load_cols = ["block", "street_name", "town"] + amenity_cols
+    df = pd.read_csv(path, usecols=load_cols, low_memory=False)
+    df["_bk"] = df["block"].astype(str).str.upper().str.strip()
+    df["_st"] = df["street_name"].astype(str).str.upper().str.strip()
     lookup = {}
-    load_cols = ["block", "street_name", "town"] + _RF_CONTINUOUS
-    for path in (
-        os.path.join(_MERGED, "[FINAL]hdb_with_amenities_macro_pre2026.csv"),
-        os.path.join(_MERGED, "[FINAL]hdb_with_amenities_macro_2026.csv"),
-    ):
-        if not os.path.exists(path):
-            continue
-        df = pd.read_csv(path, usecols=load_cols, low_memory=False)
-        df["_bk"] = df["block"].astype(str).str.upper().str.strip()
-        df["_st"] = df["street_name"].astype(str).str.upper().str.strip()
-        for _, r in df.drop_duplicates(subset=["_bk", "_st"], keep="last").iterrows():
-            lookup[(r["_bk"], r["_st"])] = r.to_dict()
+    for _, r in df.drop_duplicates(subset=["_bk", "_st"]).iterrows():
+        lookup[(r["_bk"], r["_st"])] = r.to_dict()
     return lookup
 
 _AMENITY_LOOKUP = _build_amenity_lookup()
