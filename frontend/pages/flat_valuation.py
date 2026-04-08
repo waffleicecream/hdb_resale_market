@@ -261,6 +261,17 @@ def _load_amenity_pins():
 
 _AMENITY_PINS = _load_amenity_pins()
 
+# ── Latest RPI for nominal price conversion ───────────────────
+_RPI_BASE    = 203.6  # Q4 2025 base used during model training
+_RPI_CURRENT = _RPI_BASE  # fallback if CSV unavailable
+try:
+    _rpi_df = pd.read_csv(os.path.join(_DATA, "HDBResalePriceIndex1Q2009100Quarterly.csv"),
+                          header=None, names=["quarter", "rpi"])
+    _RPI_CURRENT = float(_rpi_df["rpi"].iloc[-1])
+except Exception:
+    pass
+_RPI_SCALE = _RPI_CURRENT / _RPI_BASE
+
 # ── RF model loaded once at startup ───────────────────────────
 _RF_MODEL   = None
 _RF_ENCODER = None
@@ -352,11 +363,11 @@ def get_rf_prediction(block, street_upper, town, flat_type_ui, floor_category, r
         X[_RF_CATEGORICAL] = _RF_ENCODER.transform(X[_RF_CATEGORICAL])
         X = X.astype(float)
 
-        point = float(np.exp(_RF_MODEL.predict(X)[0]))
+        point = float(np.exp(_RF_MODEL.predict(X)[0])) * _RPI_SCALE
         return (
-            int(point + _RF_Q_LOW),
+            int(point + _RF_Q_LOW * _RPI_SCALE),
             int(point),
-            int(point + _RF_Q_HIGH),
+            int(point + _RF_Q_HIGH * _RPI_SCALE),
         )
     except Exception:
         return None
