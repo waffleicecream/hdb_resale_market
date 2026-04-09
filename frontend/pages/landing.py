@@ -73,17 +73,4 @@ layout = html.Div(className="page-wrapper", children=[
             ]),
         ])
     ]),
-
-    # ── Footer ────────────────────────────────────────────────
-    html.Footer(className="landing-footer", children=[
-        html.P([
-            "Also available at ",
-            html.A(
-                "huggingface.co/spaces/qyoon/propertyMB",
-                href="https://huggingface.co/spaces/qyoon/propertyMB",
-                target="_blank",
-                className="footer-link",
-            ),
-        ]),
-    ]),
 ])
